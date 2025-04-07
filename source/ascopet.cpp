@@ -36,18 +36,20 @@ ascopet::TimingStat calculate_stat(const ascopet::RecordBuffer& records)
         return {};
     } else if (size < 2) {
         return {
-            .m_duration_mean   = records[0].m_duration,
-            .m_duration_median = records[0].m_duration,
-            .m_duration_stdev  = {},
-            .m_duration_min    = records[0].m_duration,
-            .m_duration_max    = records[0].m_duration,
-
-            .m_interval_mean   = {},
-            .m_interval_median = {},
-            .m_interval_stdev  = {},
-            .m_interval_min    = {},
-            .m_interval_max    = {},
-
+            .m_duration = {
+                .m_mean   = records[0].m_duration,
+                .m_median = records[0].m_duration,
+                .m_stdev  = {},
+                .m_min    = records[0].m_duration,
+                .m_max    = records[0].m_duration,
+            },
+            .m_interval = {
+                .m_mean   = {},
+                .m_median = {},
+                .m_stdev  = {},
+                .m_min    = {},
+                .m_max    = {},
+            },
             .m_count = 1,
         };
     }
@@ -89,19 +91,21 @@ ascopet::TimingStat calculate_stat(const ascopet::RecordBuffer& records)
     std::nth_element(intervals.begin(), intvl_mid, intervals.end());
 
     return {
-        .m_duration_mean   = dur_mean,
-        .m_duration_median = durations[durations.size() / 2],
-        .m_duration_stdev  = dur_stdev,
-        .m_duration_min    = dur_min,
-        .m_duration_max    = dur_max,
-
-        .m_interval_mean   = intvl_mean,
-        .m_interval_median = intervals[intervals.size() / 2],
-        .m_interval_stdev  = intvl_stdev,
-        .m_interval_min    = intvl_min,
-        .m_interval_max    = intvl_max,
-
-        .m_count = durations.size(),
+        .m_duration = {
+            .m_mean   = dur_mean,
+            .m_median = durations[durations.size() / 2],
+            .m_stdev  = dur_stdev,
+            .m_min    = dur_min,
+            .m_max    = dur_max,
+        },
+        .m_interval = {
+            .m_mean   = intvl_mean,
+            .m_median = intervals[intervals.size() / 2],
+            .m_stdev  = intvl_stdev,
+            .m_min    = intvl_min,
+            .m_max    = intvl_max,
+        },
+        .m_count = records.actual_count(),
     };
 }
 
@@ -121,6 +125,17 @@ namespace ascopet
         } else {
             auto [it, _] = m_records.emplace(name, m_capacity);
             it->second.push_back(std::move(record));
+        }
+    }
+
+    void TimingList::clear(bool remove_entries)
+    {
+        if (remove_entries) {
+            m_records.clear();
+        } else {
+            for (auto& [name, records] : m_records) {
+                records.clear();
+            }
         }
     }
 
@@ -180,6 +195,17 @@ namespace ascopet
         auto lock   = std::shared_lock{ m_records_mutex };
         for (const auto& [id, records] : m_records) {
             report.emplace_back(id, records.stat());
+        }
+        return report;
+    }
+
+    Ascopet::Report Ascopet::report_consume(bool remove_entries)
+    {
+        auto report = Report{};
+        auto lock   = std::shared_lock{ m_records_mutex };
+        for (auto& [id, records] : m_records) {
+            report.emplace_back(id, records.stat());
+            records.clear(remove_entries);
         }
         return report;
     }

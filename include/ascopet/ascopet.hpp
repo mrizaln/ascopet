@@ -16,18 +16,17 @@ namespace ascopet
 {
     struct TimingStat
     {
-        Duration m_duration_mean;
-        Duration m_duration_median;
-        Duration m_duration_stdev;
-        Duration m_duration_min;
-        Duration m_duration_max;
+        struct Stat
+        {
+            Duration m_mean;
+            Duration m_median;
+            Duration m_stdev;
+            Duration m_min;
+            Duration m_max;
+        };
 
-        Duration m_interval_mean;
-        Duration m_interval_median;
-        Duration m_interval_stdev;
-        Duration m_interval_min;
-        Duration m_interval_max;
-
+        Stat        m_duration;
+        Stat        m_interval;
         std::size_t m_count = 0;
     };
 
@@ -36,7 +35,9 @@ namespace ascopet
     public:
         TimingList(std::size_t capacity);
 
-        void               push(std::string_view name, Record&& record);
+        void push(std::string_view name, Record&& record);
+        void clear(bool remove_entries);
+
         StrMap<TimingStat> stat() const;
 
     private:
@@ -83,6 +84,7 @@ namespace ascopet
         ~Ascopet();
 
         Report report() const;
+        Report report_consume(bool remove_entries);
 
         bool is_tracing() const;
         void start_tracing();

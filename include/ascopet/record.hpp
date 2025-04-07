@@ -22,6 +22,8 @@ namespace ascopet
 
         void push_back(Record&& record)
         {
+            m_count++;
+
             assert(capacity() > 0);
             if (m_tail != npos) {
                 m_buffer[m_tail] = std::move(record);    // new entry -> construct
@@ -55,6 +57,15 @@ namespace ascopet
 
         std::size_t capacity() const { return m_capacity; }
 
+        std::size_t actual_count() const { return m_count; }
+
+        void clear()
+        {
+            m_head  = 0;
+            m_tail  = 0;
+            m_count = 0;
+        }
+
     private:
         std::size_t increment(std::size_t& index)
         {
@@ -68,5 +79,7 @@ namespace ascopet
         std::size_t               m_tail = npos;
         std::size_t               m_capacity;
         std::unique_ptr<Record[]> m_buffer;
+
+        std::size_t m_count = 0;
     };
 }

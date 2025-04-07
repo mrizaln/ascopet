@@ -56,24 +56,25 @@ int main()
     for (const auto& [id, traces] : ascopet->report()) {
         std::println("\tThread {}", id);
         for (const auto& [name, timing] : traces) {
+            auto [dur, intvl, count] = timing;
             std::println("\t> {}", name);
             std::println(
                 "\t\t> Dur   [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
-                timing.m_duration_mean,
-                timing.m_duration_stdev,
-                timing.m_duration_median,
-                timing.m_duration_min,
-                timing.m_duration_max
+                dur.m_mean,
+                dur.m_stdev,
+                dur.m_median,
+                dur.m_min,
+                dur.m_max
             );
             std::println(
                 "\t\t> Intvl [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
-                timing.m_interval_mean,
-                timing.m_interval_stdev,
-                timing.m_interval_median,
-                timing.m_interval_min,
-                timing.m_interval_max
+                intvl.m_mean,
+                intvl.m_stdev,
+                intvl.m_median,
+                intvl.m_min,
+                intvl.m_max
             );
-            std::println("\t\t> Count: {}", timing.m_count);
+            std::println("\t\t> Count: {}", count);
         }
     }
 }
