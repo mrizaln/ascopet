@@ -157,6 +157,11 @@ namespace ascopet
         }
         return reports;
     }
+
+    StrMap<RecordBuffer> TimingList::records() const
+    {
+        return m_records;
+    }
 }
 
 namespace ascopet
@@ -199,9 +204,9 @@ namespace ascopet
         m_processing.store(false, std::memory_order::release);
     }
 
-    Ascopet::Report Ascopet::report() const
+    ascopet::Report Ascopet::report() const
     {
-        auto report = Report{};
+        auto report = ThreadMap<StrMap<TimingStat>>{};
         auto lock   = std::shared_lock{ m_mutex };
         for (const auto& [id, records] : m_records) {
             report.emplace(id, records.stat());
@@ -209,15 +214,39 @@ namespace ascopet
         return report;
     }
 
-    Ascopet::Report Ascopet::report_consume(bool remove_entries)
+    ascopet::Report Ascopet::report_consume(bool remove_entries)
     {
-        auto report = Report{};
+        auto report = ThreadMap<StrMap<TimingStat>>{};
         auto lock   = std::shared_lock{ m_mutex };
         for (auto& [id, records] : m_records) {
             report.emplace(id, records.stat());
             records.clear(remove_entries);
         }
+        if (remove_entries) {
+            m_records.clear();
+        }
         return report;
+    }
+
+    ascopet::RawReport Ascopet::raw_report() const
+    {
+        auto lock    = std::shared_lock{ m_mutex };
+        auto records = ThreadMap<StrMap<RecordBuffer>>{};
+        for (const auto& [id, timing_list] : m_records) {
+            records.emplace(id, timing_list.records());
+        }
+        return records;
+    }
+
+    void Ascopet::clear(bool remove_entries)
+    {
+        auto lock = std::unique_lock{ m_mutex };
+        for (auto& [id, records] : m_records) {
+            records.clear(remove_entries);
+        }
+        if (remove_entries) {
+            m_records.clear();
+        }
     }
 
     bool Ascopet::is_tracing() const

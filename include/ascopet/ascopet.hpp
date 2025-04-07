@@ -39,7 +39,8 @@ namespace ascopet
         void clear(bool remove_entries);
         void resize(std::size_t new_capacity);
 
-        StrMap<TimingStat> stat() const;
+        StrMap<TimingStat>   stat() const;
+        StrMap<RecordBuffer> records() const;
 
     private:
         std::size_t          m_capacity;
@@ -68,6 +69,9 @@ namespace ascopet
         Timepoint        m_start;
     };
 
+    using Report    = ThreadMap<StrMap<TimingStat>>;
+    using RawReport = ThreadMap<StrMap<RecordBuffer>>;
+
     class Ascopet
     {
     public:
@@ -79,13 +83,15 @@ namespace ascopet
         friend Inserter trace(std::source_location);
         friend Inserter trace(std::string_view);
 
-        using Report = ThreadMap<StrMap<TimingStat>>;
-
         Ascopet(std::size_t record_capacity, Duration interval, bool start);
         ~Ascopet();
 
         Report report() const;
         Report report_consume(bool remove_entries);
+
+        RawReport raw_report() const;
+
+        void clear(bool remove_entries = false);
 
         bool is_tracing() const;
         void start_tracing();

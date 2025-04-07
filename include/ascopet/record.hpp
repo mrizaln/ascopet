@@ -21,6 +21,23 @@ namespace ascopet
             assert(capacity > 0);
         }
 
+        RecordBuffer(RecordBuffer&&)            = default;
+        RecordBuffer& operator=(RecordBuffer&&) = default;
+
+        RecordBuffer(const RecordBuffer& other)
+            : m_head{ 0 }
+            , m_tail{ other.m_capacity == other.size() ? npos : other.size() }
+            , m_capacity{ other.m_capacity }
+            , m_buffer{ std::make_unique<Record[]>(m_capacity) }
+        {
+            assert(m_capacity > 0);
+            for (std::size_t i = 0; i < other.size(); ++i) {
+                m_buffer[i] = other[i];    // linearize as it copies
+            }
+        }
+
+        RecordBuffer& operator=(const RecordBuffer& other) = delete;
+
         void push_back(Record&& record)
         {
             m_count++;

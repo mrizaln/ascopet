@@ -40,18 +40,18 @@ int main()
 
         // std::this_thread::sleep_for(1s);
 
-        auto thread5  = std::jthread{ contention, 1024, "contention1" };
-        auto thread6  = std::jthread{ contention, 1024, "contention2" };
-        auto thread7  = std::jthread{ contention, 1024, "contention3" };
-        auto thread8  = std::jthread{ contention, 1024, "contention4" };
-        auto thread9  = std::jthread{ contention, 1024, "contention5" };
-        auto thread10 = std::jthread{ contention, 1024, "contention6" };
-        auto thread11 = std::jthread{ contention, 1024, "contention7" };
-        auto thread12 = std::jthread{ contention, 1024, "contention8" };
+        auto thread5  = std::jthread{ contention, 10240, "contention1" };
+        auto thread6  = std::jthread{ contention, 10240, "contention2" };
+        auto thread7  = std::jthread{ contention, 10240, "contention3" };
+        auto thread8  = std::jthread{ contention, 10240, "contention4" };
+        auto thread9  = std::jthread{ contention, 10240, "contention5" };
+        auto thread10 = std::jthread{ contention, 10240, "contention6" };
+        auto thread11 = std::jthread{ contention, 10240, "contention7" };
+        auto thread12 = std::jthread{ contention, 10240, "contention8" };
 
         std::this_thread::sleep_for(1s);
 
-        ascopet::instance()->resize_record_capacity(512);
+        ascopet->resize_record_capacity(512);
 
         std::this_thread::sleep_for(1s);
     }
