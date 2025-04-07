@@ -5,7 +5,7 @@
 #include <mutex>
 
 std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_duration_interval(
-    const circbuf::CircBuf<ascopet::Record>& records
+    const ascopet::RecordBuffer& records
 )
 {
     assert(records.size() >= 2);
@@ -17,10 +17,10 @@ std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_
     intervals.reserve(records.size() - 1);
 
     for (auto i = 0u; i < records.size(); ++i) {
-        auto [dur, start] = records.at(i);
+        auto [dur, start] = records[i];
         durations.push_back(dur);
         if (i > 0) {
-            auto dt = start - records.at(i - 1).m_start;
+            auto dt = start - records[i - 1].m_start;
             intervals.push_back(dt);
         }
     }
@@ -28,7 +28,7 @@ std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_
     return { std::move(durations), std::move(intervals) };
 }
 
-ascopet::TimingStat calculate_stat(const circbuf::CircBuf<ascopet::Record>& records)
+ascopet::TimingStat calculate_stat(const ascopet::RecordBuffer& records)
 {
     using namespace ascopet;
 
@@ -36,11 +36,11 @@ ascopet::TimingStat calculate_stat(const circbuf::CircBuf<ascopet::Record>& reco
         return {};
     } else if (size < 2) {
         return {
-            .m_duration_mean   = records.front().m_duration,
-            .m_duration_median = records.front().m_duration,
+            .m_duration_mean   = records[0].m_duration,
+            .m_duration_median = records[0].m_duration,
             .m_duration_stdev  = {},
-            .m_duration_min    = records.front().m_duration,
-            .m_duration_max    = records.front().m_duration,
+            .m_duration_min    = records[0].m_duration,
+            .m_duration_max    = records[0].m_duration,
 
             .m_interval_mean   = {},
             .m_interval_median = {},
@@ -113,14 +113,14 @@ namespace ascopet
         assert(capacity > 0);
     }
 
-    void TimingList::push(std::string_view name, Record record)
+    void TimingList::push(std::string_view name, Record&& record)
     {
         auto it = m_records.find(name);
         if (it != m_records.end()) {
-            it->second.push_back(record);
+            it->second.push_back(std::move(record));
         } else {
             auto [it, _] = m_records.emplace(name, m_capacity);
-            it->second.push_back(record);
+            it->second.push_back(std::move(record));
         }
     }
 
@@ -214,10 +214,10 @@ namespace ascopet
                     }
                     auto it = m_records.find(id);
                     if (it != m_records.end()) {
-                        it->second.push(name, record);
+                        it->second.push(name, std::move(record));
                     } else {
                         auto [it, _] = m_records.emplace(id, m_record_capacity);
-                        it->second.push(name, record);
+                        it->second.push(name, std::move(record));
                     }
                 });
             }

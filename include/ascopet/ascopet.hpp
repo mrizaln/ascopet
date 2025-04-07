@@ -2,7 +2,7 @@
 
 #include <ascopet/common.hpp>
 #include <ascopet/queue.hpp>
-#include <circbuf/circbuf.hpp>
+#include <ascopet/record.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -36,12 +36,12 @@ namespace ascopet
     public:
         TimingList(std::size_t capacity);
 
-        void               push(std::string_view name, Record record);
+        void               push(std::string_view name, Record&& record);
         StrMap<TimingStat> stat() const;
 
     private:
-        std::size_t                      m_capacity;
-        StrMap<circbuf::CircBuf<Record>> m_records;
+        std::size_t          m_capacity;
+        StrMap<RecordBuffer> m_records;
     };
 
     class Ascopet;
