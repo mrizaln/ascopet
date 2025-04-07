@@ -136,8 +136,8 @@ namespace ascopet
 
 namespace ascopet
 {
-    Inserter::Inserter(std::shared_ptr<Ascopet> ascopet, std::string_view name)
-        : m_ascopet{ std::move(ascopet) }
+    Inserter::Inserter(Ascopet* ascopet, std::string_view name)
+        : m_ascopet{ ascopet }
         , m_name{ name }
         , m_start{ Clock::now() }
     {
@@ -237,27 +237,30 @@ namespace ascopet
 
 namespace ascopet
 {
-    std::shared_ptr<Ascopet> instance()
+    // NOTE: I'm forced to do the old way of initializing here since clang complains if I use static inline...
+    std::unique_ptr<Ascopet> Ascopet::s_instance = nullptr;
+
+    Ascopet* instance()
     {
-        return Ascopet::instance;
+        return Ascopet::s_instance.get();
     }
 
-    std::shared_ptr<Ascopet> init(bool immediately_start, std::size_t record_capacity, Duration interval)
+    Ascopet* init(bool immediately_start, std::size_t record_capacity, Duration interval)
     {
-        if (not Ascopet::instance) {
-            Ascopet::instance = std::make_shared<Ascopet>(record_capacity, interval, immediately_start);
+        if (not Ascopet::s_instance) {
+            Ascopet::s_instance = std::make_unique<Ascopet>(record_capacity, interval, immediately_start);
         }
-        return Ascopet::instance;
+        return Ascopet::s_instance.get();
     }
 
     Inserter trace(std::source_location location)
     {
         auto name = location.function_name();
-        return { Ascopet::instance, name };
+        return { Ascopet::s_instance.get(), name };
     }
 
     Inserter trace(std::string_view name)
     {
-        return { Ascopet::instance, name };
+        return { Ascopet::s_instance.get(), name };
     }
 }

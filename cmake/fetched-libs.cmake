@@ -12,14 +12,3 @@ FetchContent_MakeAvailable(circbuf)
 
 add_library(fetch::circbuf ALIAS circbuf)
 # ~~~~~~~
-
-# concurrentqueue
-# ~~~~~~~~~~~~~~~
-FetchContent_Declare(
-  concurrentqueue
-  GIT_REPOSITORY https://github.com/cameron314/concurrentqueue
-  GIT_TAG v1.0.4)
-FetchContent_MakeAvailable(concurrentqueue)
-
-add_library(fetch::concurrentqueue ALIAS concurrentqueue)
-# ~~~~~~~~~~~~~~~

@@ -52,7 +52,7 @@ namespace ascopet
         Inserter() = default;
         ~Inserter();
 
-        Inserter(std::shared_ptr<Ascopet> ascopet, std::string_view name);
+        Inserter(Ascopet* ascopet, std::string_view name);
 
         Inserter(Inserter&&)            = delete;
         Inserter& operator=(Inserter&&) = delete;
@@ -61,9 +61,9 @@ namespace ascopet
         Inserter& operator=(const Inserter&) = delete;
 
     private:
-        std::shared_ptr<Ascopet> m_ascopet = nullptr;
-        std::string_view         m_name;
-        Timepoint                m_start;
+        Ascopet*         m_ascopet = nullptr;
+        std::string_view m_name;
+        Timepoint        m_start;
     };
 
     class Ascopet
@@ -71,8 +71,8 @@ namespace ascopet
     public:
         friend Inserter;
 
-        friend std::shared_ptr<Ascopet> instance();
-        friend std::shared_ptr<Ascopet> init(bool, std::size_t, Duration);
+        friend Ascopet* instance();
+        friend Ascopet* init(bool, std::size_t, Duration);
 
         friend Inserter trace(std::source_location);
         friend Inserter trace(std::string_view);
@@ -89,7 +89,7 @@ namespace ascopet
         void pause_tracing();
 
     private:
-        static inline std::shared_ptr<Ascopet> instance = nullptr;
+        static std::unique_ptr<Ascopet> s_instance;
 
         void worker(std::stop_token st);
         void insert(std::string_view name, Timepoint start);
@@ -105,9 +105,9 @@ namespace ascopet
         Duration          m_process_interval;
     };
 
-    std::shared_ptr<Ascopet> instance();
+    Ascopet* instance();
 
-    std::shared_ptr<Ascopet> init(
+    Ascopet* init(
         bool        immediately_start = false,
         std::size_t record_capacity   = 1024,
         Duration    interval          = std::chrono::milliseconds{ 100 }
