@@ -194,7 +194,7 @@ namespace ascopet
         auto report = Report{};
         auto lock   = std::shared_lock{ m_records_mutex };
         for (const auto& [id, records] : m_records) {
-            report.emplace_back(id, records.stat());
+            report.emplace(id, records.stat());
         }
         return report;
     }
@@ -204,7 +204,7 @@ namespace ascopet
         auto report = Report{};
         auto lock   = std::shared_lock{ m_records_mutex };
         for (auto& [id, records] : m_records) {
-            report.emplace_back(id, records.stat());
+            report.emplace(id, records.stat());
             records.clear(remove_entries);
         }
         return report;

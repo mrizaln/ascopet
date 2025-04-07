@@ -78,7 +78,7 @@ namespace ascopet
         friend Inserter trace(std::source_location);
         friend Inserter trace(std::string_view);
 
-        using Report = std::vector<std::pair<std::thread::id, StrMap<TimingStat>>>;
+        using Report = ThreadMap<StrMap<TimingStat>>;
 
         Ascopet(std::size_t record_capacity, Duration interval, bool start);
         ~Ascopet();
