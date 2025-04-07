@@ -139,6 +139,16 @@ namespace ascopet
         }
     }
 
+    void TimingList::resize(std::size_t new_capacity)
+    {
+        if (new_capacity == m_capacity) {
+            return;
+        }
+        for (auto& [_, records] : m_records) {
+            records.resize(new_capacity);
+        }
+    }
+
     StrMap<TimingStat> TimingList::stat() const
     {
         auto reports = StrMap<TimingStat>{};
@@ -169,10 +179,10 @@ namespace ascopet
 namespace ascopet
 {
     Ascopet::Ascopet(std::size_t record_capacity, Duration interval, bool start)
-        : m_queue{ record_capacity }
+        : m_queue{ record_capacity * std::thread::hardware_concurrency() }
         , m_worker{ std::jthread([this](std::stop_token st) { worker(st); }) }
-        , m_record_capacity{ record_capacity }
         , m_processing{ start }
+        , m_record_capacity{ record_capacity }
         , m_process_interval{ interval }
     {
     }
@@ -192,7 +202,7 @@ namespace ascopet
     Ascopet::Report Ascopet::report() const
     {
         auto report = Report{};
-        auto lock   = std::shared_lock{ m_records_mutex };
+        auto lock   = std::shared_lock{ m_mutex };
         for (const auto& [id, records] : m_records) {
             report.emplace(id, records.stat());
         }
@@ -202,7 +212,7 @@ namespace ascopet
     Ascopet::Report Ascopet::report_consume(bool remove_entries)
     {
         auto report = Report{};
-        auto lock   = std::shared_lock{ m_records_mutex };
+        auto lock   = std::shared_lock{ m_mutex };
         for (auto& [id, records] : m_records) {
             report.emplace(id, records.stat());
             records.clear(remove_entries);
@@ -227,13 +237,39 @@ namespace ascopet
         m_processing.notify_one();
     }
 
+    std::size_t Ascopet::record_capacity() const
+    {
+        auto lock = std::shared_lock{ m_mutex };
+        return m_record_capacity;
+    }
+
+    void Ascopet::resize_record_capacity(std::size_t capacity)
+    {
+        auto lock         = std::unique_lock{ m_mutex };
+        m_record_capacity = capacity;
+        for (auto& [id, records] : m_records) {
+            records.resize(capacity);
+        }
+    }
+
+    ascopet::Duration Ascopet::process_interval() const
+    {
+        auto lock = std::shared_lock{ m_mutex };
+        return m_process_interval;
+    }
+
+    void Ascopet::set_process_interval(Duration interval)
+    {
+        m_process_interval = interval;
+    }
+
     void Ascopet::worker(std::stop_token st)
     {
         m_processing.wait(false);
 
         while (not st.stop_requested()) {
-            {
-                auto lock = std::unique_lock{ m_records_mutex };
+            auto time = [this] {
+                auto lock = std::unique_lock{ m_mutex };
                 m_queue.consume([this](std::thread::id id, std::string_view name, Record&& record) {
                     if (name == "") {
                         return;
@@ -246,9 +282,10 @@ namespace ascopet
                         it->second.push(name, std::move(record));
                     }
                 });
-            }
+                return m_process_interval;
+            }();
 
-            std::this_thread::sleep_for(m_process_interval);
+            std::this_thread::sleep_for(time);
             m_processing.wait(false);
         }
     }

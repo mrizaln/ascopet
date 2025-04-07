@@ -30,7 +30,7 @@ void contention(std::size_t count, std::string_view name)
 
 int main()
 {
-    auto ascopet = ascopet::init(true, 10240);
+    auto ascopet = ascopet::init(true, 1024);
 
     {
         auto thread1 = std::jthread{ producer, 10ms, "1" };
@@ -48,6 +48,10 @@ int main()
         auto thread10 = std::jthread{ contention, 1024, "contention6" };
         auto thread11 = std::jthread{ contention, 1024, "contention7" };
         auto thread12 = std::jthread{ contention, 1024, "contention8" };
+
+        std::this_thread::sleep_for(1s);
+
+        ascopet::instance()->resize_record_capacity(512);
 
         std::this_thread::sleep_for(1s);
     }

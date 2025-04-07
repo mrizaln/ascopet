@@ -1,6 +1,7 @@
 #pragma once
 
-#include <ascopet/common.hpp>
+#include "ascopet/common.hpp"
+
 #include <cassert>
 #include <memory>
 
@@ -48,6 +49,26 @@ namespace ascopet
             assert(pos < size());
             auto realpos = (m_head + pos) % capacity();
             return m_buffer[realpos];
+        }
+
+        void resize(std::size_t new_capacity)
+        {
+            if (new_capacity == m_capacity) {
+                return;
+            }
+
+            auto new_buffer = std::make_unique<Record[]>(new_capacity);
+            auto offset     = new_capacity < size() ? size() - new_capacity : 0;
+            auto count      = std::min(new_capacity, size());
+
+            for (auto i = 0u; i < count; ++i) {
+                new_buffer[i] = std::move(m_buffer[(m_head + offset + i) % m_capacity]);
+            }
+
+            m_buffer   = std::move(new_buffer);
+            m_head     = 0;
+            m_tail     = count == new_capacity ? npos : count;
+            m_capacity = new_capacity;
         }
 
         std::size_t size() const

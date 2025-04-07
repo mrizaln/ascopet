@@ -1,8 +1,8 @@
 #pragma once
 
-#include <ascopet/common.hpp>
-#include <ascopet/queue.hpp>
-#include <ascopet/record.hpp>
+#include "ascopet/common.hpp"
+#include "ascopet/queue.hpp"
+#include "ascopet/record.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -37,6 +37,7 @@ namespace ascopet
 
         void push(std::string_view name, Record&& record);
         void clear(bool remove_entries);
+        void resize(std::size_t new_capacity);
 
         StrMap<TimingStat> stat() const;
 
@@ -90,20 +91,27 @@ namespace ascopet
         void start_tracing();
         void pause_tracing();
 
+        std::size_t record_capacity() const;
+        void        resize_record_capacity(std::size_t capacity);
+
+        Duration process_interval() const;
+        void     set_process_interval(Duration interval);
+
     private:
         static std::unique_ptr<Ascopet> s_instance;
 
         void worker(std::stop_token st);
         void insert(std::string_view name, Timepoint start);
 
-        mutable std::shared_mutex m_records_mutex;
-        ThreadMap<TimingList>     m_records;
-        Queue                     m_queue;
+        mutable std::shared_mutex m_mutex;
+
+        ThreadMap<TimingList> m_records;
+        Queue                 m_queue;
 
         std::jthread m_worker;
 
+        std::atomic<bool> m_processing;
         std::size_t       m_record_capacity;
-        std::atomic<bool> m_processing = false;
         Duration          m_process_interval;
     };
 
