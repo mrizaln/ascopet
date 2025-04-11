@@ -1,34 +1,38 @@
 #pragma once
 
-#include "ascopet/common.hpp"
-
 #include <cassert>
+#include <concepts>
 #include <memory>
+#include <type_traits>
 
 namespace ascopet
 {
-    class RecordBuffer
+    template <typename T>
+        requires std::default_initializable<T>                //
+             and std::is_trivially_move_constructible_v<T>    //
+             and std::is_trivially_destructible_v<T>
+    class RingBuf
     {
     public:
         static constexpr std::size_t npos = std::numeric_limits<std::size_t>::max();
 
-        RecordBuffer(std::size_t capacity)
+        RingBuf(std::size_t capacity)
             : m_head{ 0 }
             , m_tail{ 0 }
             , m_capacity{ capacity }
-            , m_buffer{ std::make_unique<Record[]>(capacity) }
+            , m_buffer{ std::make_unique<T[]>(capacity) }
         {
             assert(capacity > 0);
         }
 
-        RecordBuffer(RecordBuffer&&)            = default;
-        RecordBuffer& operator=(RecordBuffer&&) = default;
+        RingBuf(RingBuf&&)            = default;
+        RingBuf& operator=(RingBuf&&) = default;
 
-        RecordBuffer(const RecordBuffer& other)
+        RingBuf(const RingBuf& other)
             : m_head{ 0 }
             , m_tail{ other.m_capacity == other.size() ? npos : other.size() }
             , m_capacity{ other.m_capacity }
-            , m_buffer{ std::make_unique<Record[]>(m_capacity) }
+            , m_buffer{ std::make_unique<T[]>(m_capacity) }
         {
             assert(m_capacity > 0);
             for (std::size_t i = 0; i < other.size(); ++i) {
@@ -36,9 +40,9 @@ namespace ascopet
             }
         }
 
-        RecordBuffer& operator=(const RecordBuffer& other) = delete;
+        RingBuf& operator=(const RingBuf& other) = delete;
 
-        void push_back(Record&& record)
+        void push_back(T&& record)
         {
             m_count++;
 
@@ -54,14 +58,14 @@ namespace ascopet
             }
         }
 
-        Record& operator[](std::size_t pos)
+        T& operator[](std::size_t pos)
         {
             assert(pos < size());
             auto realpos = (m_head + pos) % capacity();
             return m_buffer[realpos];
         }
 
-        const Record& operator[](std::size_t pos) const
+        const T& operator[](std::size_t pos) const
         {
             assert(pos < size());
             auto realpos = (m_head + pos) % capacity();
@@ -74,7 +78,7 @@ namespace ascopet
                 return;
             }
 
-            auto new_buffer = std::make_unique<Record[]>(new_capacity);
+            auto new_buffer = std::make_unique<T[]>(new_capacity);
             auto offset     = new_capacity < size() ? size() - new_capacity : 0;
             auto count      = std::min(new_capacity, size());
 
@@ -113,10 +117,10 @@ namespace ascopet
             return index;
         }
 
-        std::size_t               m_head = 0;
-        std::size_t               m_tail = npos;
-        std::size_t               m_capacity;
-        std::unique_ptr<Record[]> m_buffer;
+        std::size_t          m_head = 0;
+        std::size_t          m_tail = npos;
+        std::size_t          m_capacity;
+        std::unique_ptr<T[]> m_buffer;
 
         std::size_t m_count = 0;
     };
