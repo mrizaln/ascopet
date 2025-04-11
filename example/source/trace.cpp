@@ -36,32 +36,27 @@ int main()
 {
     auto ascopet = ascopet::init({
         .m_immediately_start = true,
+        .m_interval          = 25ms,
         .m_buffer_capacity   = 10240,
     });
     auto flag    = std::atomic<bool>{ false };
 
     {
-        auto thread1 = std::jthread{ producer, 10ms, "1" };
-        auto thread2 = std::jthread{ producer, 11ms, "2" };
-        auto thread3 = std::jthread{ producer, 12ms, "3" };
-        auto thread4 = std::jthread{ producer, 13ms, "4" };
-        auto thread5 = std::jthread{ producer, 10ms, "5" };
-        auto thread6 = std::jthread{ producer, 11ms, "6" };
-        auto thread7 = std::jthread{ producer, 12ms, "7" };
-        auto thread8 = std::jthread{ producer, 13ms, "8" };
+        // auto thread1 = std::jthread{ producer, 10ms, "1" };
+        // auto thread2 = std::jthread{ producer, 11ms, "2" };
+        // auto thread3 = std::jthread{ producer, 12ms, "3" };
+        // auto thread4 = std::jthread{ producer, 13ms, "4" };
+        // auto thread5 = std::jthread{ producer, 10ms, "5" };
+        // auto thread6 = std::jthread{ producer, 11ms, "6" };
 
         // std::this_thread::sleep_for(1s);
 
-        auto thread9  = std::jthread{ contention, std::ref(flag), 11'024'000, "contention1" };
-        auto thread10 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention2" };
-        auto thread11 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention3" };
-        auto thread12 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention4" };
-        auto thread13 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention5" };
-        auto thread14 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention6" };
-        auto thread15 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention7" };
-        auto thread16 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention8" };
-
-        std::this_thread::sleep_for(1s);
+        auto thread7  = std::jthread{ contention, std::ref(flag), 11'024'000, "contention1" };
+        auto thread8  = std::jthread{ contention, std::ref(flag), 10'024'000, "contention2" };
+        auto thread9  = std::jthread{ contention, std::ref(flag), 10'024'000, "contention3" };
+        auto thread10 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention4" };
+        auto thread11 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention5" };
+        auto thread12 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention6" };
 
         flag.store(true);
         flag.notify_all();

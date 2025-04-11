@@ -49,7 +49,7 @@ namespace ascopet
         StrMap<RingBuf<Record>> m_records;
     };
 
-    class Tracer
+    class [[nodiscard]] Tracer
     {
     public:
         ~Tracer();
@@ -130,7 +130,7 @@ namespace ascopet
     };
 
     Ascopet* instance();
-    Ascopet* init(InitParam&& param);
+    Ascopet* init(InitParam&& param = {});
 
     Tracer trace(std::source_location location = std::source_location::current());
     Tracer trace(std::string_view name);
