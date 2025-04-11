@@ -1,11 +1,12 @@
 #include "ascopet/ascopet.hpp"
+#include "ascopet/localbuf.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <mutex>
 
 std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_duration_interval(
-    const ascopet::RecordBuffer& records
+    const ascopet::RingBuf<ascopet::Record>& records
 )
 {
     assert(records.size() >= 2);
@@ -17,8 +18,8 @@ std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_
     intervals.reserve(records.size() - 1);
 
     for (auto i = 0u; i < records.size(); ++i) {
-        auto [dur, start] = records[i];
-        durations.push_back(dur);
+        auto [start, end] = records[i];
+        durations.push_back(end - start);
         if (i > 0) {
             auto dt = start - records[i - 1].m_start;
             intervals.push_back(dt);
@@ -28,20 +29,21 @@ std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_
     return { std::move(durations), std::move(intervals) };
 }
 
-ascopet::TimingStat calculate_stat(const ascopet::RecordBuffer& records)
+ascopet::TimingStat calculate_stat(const ascopet::RingBuf<ascopet::Record>& records)
 {
     using namespace ascopet;
 
     if (const auto size = records.size(); size == 0) {
         return {};
     } else if (size < 2) {
+        auto dur = records[0].m_end - records[0].m_start;
         return {
             .m_duration = {
-                .m_mean   = records[0].m_duration,
-                .m_median = records[0].m_duration,
+                .m_mean   = dur,
+                .m_median = dur,
                 .m_stdev  = {},
-                .m_min    = records[0].m_duration,
-                .m_max    = records[0].m_duration,
+                .m_min    = dur,
+                .m_max    = dur,
             },
             .m_interval = {
                 .m_mean   = {},
@@ -117,14 +119,14 @@ namespace ascopet
         assert(capacity > 0);
     }
 
-    void TimingList::push(std::string_view name, Record&& record)
+    void TimingList::push_back(const NamedRecord& record)
     {
-        auto it = m_records.find(name);
+        auto it = m_records.find(record.m_name);
         if (it != m_records.end()) {
-            it->second.push_back(std::move(record));
+            it->second.push_back({ record.m_start, record.m_end });
         } else {
-            auto [it, _] = m_records.emplace(name, m_capacity);
-            it->second.push_back(std::move(record));
+            auto [it, _] = m_records.emplace(record.m_name, m_capacity);
+            it->second.push_back({ record.m_start, record.m_end });
         }
     }
 
@@ -158,7 +160,7 @@ namespace ascopet
         return reports;
     }
 
-    StrMap<RecordBuffer> TimingList::records() const
+    StrMap<RingBuf<Record>> TimingList::records() const
     {
         return m_records;
     }
@@ -166,29 +168,33 @@ namespace ascopet
 
 namespace ascopet
 {
-    Inserter::Inserter(Ascopet* ascopet, std::string_view name)
-        : m_ascopet{ ascopet }
+    Tracer::Tracer(LocalBuf* buffer, std::string_view name)
+        : m_buffer{ buffer }
         , m_name{ name }
         , m_start{ Clock::now() }
     {
     }
 
-    Inserter::~Inserter()
+    Tracer::~Tracer()
     {
-        if (m_ascopet) {
-            m_ascopet->insert(m_name, m_start);
+        if (m_buffer) {
+            m_buffer->add_record({
+                .m_name  = m_name,
+                .m_start = m_start,
+                .m_end   = Clock::now(),
+            });
         }
     }
 }
 
 namespace ascopet
 {
-    Ascopet::Ascopet(std::size_t record_capacity, Duration interval, bool start)
-        : m_queue{ record_capacity * std::thread::hardware_concurrency() }
+    Ascopet::Ascopet(InitParam&& param)
+        : m_processing{ param.m_immediately_start }
         , m_worker{ std::jthread([this](std::stop_token st) { worker(st); }) }
-        , m_processing{ start }
-        , m_record_capacity{ record_capacity }
-        , m_process_interval{ interval }
+        , m_record_capacity{ param.m_record_capacity }
+        , m_buffer_capacity{ param.m_buffer_capacity }
+        , m_process_interval{ param.m_interval }
     {
     }
 
@@ -231,7 +237,7 @@ namespace ascopet
     ascopet::RawReport Ascopet::raw_report() const
     {
         auto lock    = std::shared_lock{ m_mutex };
-        auto records = ThreadMap<StrMap<RecordBuffer>>{};
+        auto records = ThreadMap<StrMap<RingBuf<Record>>>{};
         for (const auto& [id, timing_list] : m_records) {
             records.emplace(id, timing_list.records());
         }
@@ -272,6 +278,12 @@ namespace ascopet
         return m_record_capacity;
     }
 
+    std::size_t Ascopet::localbuf_capacity() const
+    {
+        auto lock = std::shared_lock{ m_mutex };
+        return m_buffer_capacity;
+    }
+
     void Ascopet::resize_record_capacity(std::size_t capacity)
     {
         auto lock         = std::unique_lock{ m_mutex };
@@ -292,37 +304,49 @@ namespace ascopet
         m_process_interval = interval;
     }
 
+    void Ascopet::add_localbuf(std::thread::id id, LocalBuf& buffer)
+    {
+        auto lock = std::unique_lock{ m_mutex };
+        m_buffers.emplace(id, &buffer);
+    }
+
+    void Ascopet::remove_localbuf(std::thread::id id)
+    {
+        auto lock = std::unique_lock{ m_mutex };
+        m_buffers.erase(id);
+    }
+
     void Ascopet::worker(std::stop_token st)
     {
         m_processing.wait(false);
 
         while (not st.stop_requested()) {
-            auto time = [this] {
-                auto lock = std::unique_lock{ m_mutex };
-                m_queue.consume([this](std::thread::id id, std::string_view name, Record&& record) {
-                    if (name == "") {
-                        return;
-                    }
+            auto elapsed = [this] {
+                auto start = Clock::now();
+                auto lock  = std::unique_lock{ m_mutex };
+
+                for (auto [id, buffer] : m_buffers) {
+                    auto& records = buffer->swap_buffers();
+
                     auto it = m_records.find(id);
-                    if (it != m_records.end()) {
-                        it->second.push(name, std::move(record));
-                    } else {
-                        auto [it, _] = m_records.emplace(id, m_record_capacity);
-                        it->second.push(name, std::move(record));
+                    if (it == m_records.end()) {
+                        auto [new_it, _] = m_records.emplace(id, m_record_capacity);
+                        it               = new_it;
                     }
-                });
-                return m_process_interval;
+
+                    for (auto i = 0u; i < records.size(); ++i) {
+                        auto& record = records[i];
+                        it->second.push_back(record);
+                    }
+
+                    records.clear();
+                }
+
+                return Clock::now() - start;
             }();
 
-            std::this_thread::sleep_for(time);
+            std::this_thread::sleep_for(m_process_interval - elapsed);
             m_processing.wait(false);
-        }
-    }
-
-    void Ascopet::insert(std::string_view name, Timepoint start)
-    {
-        if (is_tracing()) {
-            m_queue.push(name, start);
         }
     }
 }
@@ -337,22 +361,26 @@ namespace ascopet
         return Ascopet::s_instance.get();
     }
 
-    Ascopet* init(bool immediately_start, std::size_t record_capacity, Duration interval)
+    Ascopet* init(InitParam&& param)
     {
         if (not Ascopet::s_instance) {
-            Ascopet::s_instance = std::make_unique<Ascopet>(record_capacity, interval, immediately_start);
+            Ascopet::s_instance.reset(new Ascopet{ std::move(param) });
         }
         return Ascopet::s_instance.get();
     }
 
-    Inserter trace(std::source_location location)
+    Tracer trace(std::source_location location)
     {
         auto name = location.function_name();
-        return { Ascopet::s_instance.get(), name };
+        return trace(name);
     }
 
-    Inserter trace(std::string_view name)
+    Tracer trace(std::string_view name)
     {
-        return { Ascopet::s_instance.get(), name };
+        if (auto ptr = instance(); ptr != nullptr) {
+            static thread_local auto buffer = LocalBuf{ ptr };
+            return { &buffer, name };
+        }
+        return { nullptr, name };
     }
 }

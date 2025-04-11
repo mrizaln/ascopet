@@ -71,7 +71,7 @@ namespace ascopet
 
             node->m_thread_id = std::this_thread::get_id();
             node->m_name      = name;
-            node->m_record    = { .m_duration = Clock::now() - start, .m_start = start };
+            node->m_record    = { .m_start = start, .m_end = Clock::now() };
 
             auto* prev = m_tail.exchange(node, Ord::acq_rel);
             prev->m_next.store(node, Ord::release);

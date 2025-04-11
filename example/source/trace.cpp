@@ -21,35 +21,50 @@ void producer(std::stop_token st, ascopet::Duration duration, std::string_view n
     std::println(">> end {}", name);
 }
 
-void contention(std::size_t count, std::string_view name)
+void contention(std::atomic<bool>& flag, std::size_t count, std::string_view name)
 {
+    flag.wait(false);
+
+    std::println(">> start {}", name);
     for (auto i = 0u; i < count; ++i) {
         auto trace = ascopet::trace(name);    // timing overhead
     }
+    std::println(">> end {}", name);
 }
 
 int main()
 {
-    auto ascopet = ascopet::init(true, 1024);
+    auto ascopet = ascopet::init({
+        .m_immediately_start = true,
+        .m_buffer_capacity   = 10240,
+    });
+    auto flag    = std::atomic<bool>{ false };
 
     {
         auto thread1 = std::jthread{ producer, 10ms, "1" };
         auto thread2 = std::jthread{ producer, 11ms, "2" };
         auto thread3 = std::jthread{ producer, 12ms, "3" };
         auto thread4 = std::jthread{ producer, 13ms, "4" };
+        auto thread5 = std::jthread{ producer, 10ms, "5" };
+        auto thread6 = std::jthread{ producer, 11ms, "6" };
+        auto thread7 = std::jthread{ producer, 12ms, "7" };
+        auto thread8 = std::jthread{ producer, 13ms, "8" };
 
         // std::this_thread::sleep_for(1s);
 
-        auto thread5  = std::jthread{ contention, 10240, "contention1" };
-        auto thread6  = std::jthread{ contention, 10240, "contention2" };
-        auto thread7  = std::jthread{ contention, 10240, "contention3" };
-        auto thread8  = std::jthread{ contention, 10240, "contention4" };
-        auto thread9  = std::jthread{ contention, 10240, "contention5" };
-        auto thread10 = std::jthread{ contention, 10240, "contention6" };
-        auto thread11 = std::jthread{ contention, 10240, "contention7" };
-        auto thread12 = std::jthread{ contention, 10240, "contention8" };
+        auto thread9  = std::jthread{ contention, std::ref(flag), 11'024'000, "contention1" };
+        auto thread10 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention2" };
+        auto thread11 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention3" };
+        auto thread12 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention4" };
+        auto thread13 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention5" };
+        auto thread14 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention6" };
+        auto thread15 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention7" };
+        auto thread16 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention8" };
 
         std::this_thread::sleep_for(1s);
+
+        flag.store(true);
+        flag.notify_all();
 
         ascopet->resize_record_capacity(512);
 
