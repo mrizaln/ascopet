@@ -32,16 +32,46 @@ void contention(std::atomic<bool>& flag, std::size_t count, std::string_view nam
     std::println(">> end {}", name);
 }
 
+void baseline_overhead(std::size_t count)
+{
+    auto min_rep = std::numeric_limits<ascopet::Clock::rep>::max();
+    auto max_rep = std::numeric_limits<ascopet::Clock::rep>::min();
+
+    auto min = ascopet::Duration{ min_rep };
+    auto max = ascopet::Duration{ max_rep };
+
+    while (count-- > 0) {
+        auto t1 = ascopet::Clock::now();
+        auto t2 = ascopet::Clock::now();
+
+        auto diff = t2 - t1;
+
+        if (diff < min) {
+            min = diff;
+        }
+        if (diff > max) {
+            max = diff;
+        }
+    }
+
+    std::println("Baseline overhead:");
+    std::println("\tMin: {}", min);
+    std::println("\tMax: {}", max);
+}
+
 int main()
 {
     auto ascopet = ascopet::init({
-        .m_immediately_start = true,
-        .m_interval          = 25ms,
-        .m_buffer_capacity   = 10240,
+        .immediately_start = true,
+        .poll_interval     = 25ms,
+        .buffer_capacity   = 10240,
     });
-    auto flag    = std::atomic<bool>{ false };
+
+    auto flag = std::atomic<bool>{ false };
 
     {
+        baseline_overhead(1'000'000);
+
         // auto thread1 = std::jthread{ producer, 10ms, "1" };
         // auto thread2 = std::jthread{ producer, 11ms, "2" };
         // auto thread3 = std::jthread{ producer, 12ms, "3" };
@@ -49,9 +79,7 @@ int main()
         // auto thread5 = std::jthread{ producer, 10ms, "5" };
         // auto thread6 = std::jthread{ producer, 11ms, "6" };
 
-        // std::this_thread::sleep_for(1s);
-
-        auto thread7  = std::jthread{ contention, std::ref(flag), 11'024'000, "contention1" };
+        auto thread7  = std::jthread{ contention, std::ref(flag), 10'024'000, "contention1" };
         auto thread8  = std::jthread{ contention, std::ref(flag), 10'024'000, "contention2" };
         auto thread9  = std::jthread{ contention, std::ref(flag), 10'024'000, "contention3" };
         auto thread10 = std::jthread{ contention, std::ref(flag), 10'024'000, "contention4" };
@@ -74,19 +102,19 @@ int main()
             std::println("\t> {}", name);
             std::println(
                 "\t\t> Dur   [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
-                dur.m_mean,
-                dur.m_stdev,
-                dur.m_median,
-                dur.m_min,
-                dur.m_max
+                dur.mean,
+                dur.stdev,
+                dur.median,
+                dur.min,
+                dur.max
             );
             std::println(
                 "\t\t> Intvl [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
-                intvl.m_mean,
-                intvl.m_stdev,
-                intvl.m_median,
-                intvl.m_min,
-                intvl.m_max
+                intvl.mean,
+                intvl.stdev,
+                intvl.median,
+                intvl.min,
+                intvl.max
             );
             std::println("\t\t> Count: {}", count);
         }
