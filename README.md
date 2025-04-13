@@ -10,30 +10,29 @@ Performance optimization is a common task in C++ programming. One of the thing t
 
 - Simple
 - C++20 compatible
-- Minimal overhead (about **60ns** of overhead per scope measurement)
+- Minimal overhead (**60ns** of overhead per scope measurement on 2.5GHz x86_64 Linux machine)
 - Asynchronous timing handling
 
 ## Usage
 
-This library is using asynchronous approach in its timing management by collecting the time records in a background thread that run every once in a while. You need to initialize the library before using it. If you are calling `ascopet::trace` before the library is initialized, the scope time measurement won't be recorded.
+This library is using asynchronous approach in its timing management by collecting the time records in a background thread that run every once in a while (polling). You need to initialize the library before using it. If you are calling `ascopet::trace` before the library is initialized, the scope time measurement won't be recorded, but it will be written into its own TLS buffer.
 
-> initializing the library
+### Initializing the library
 
 ```cpp
 #include <ascopet/ascopet.h>
-
 
 int main()
 {
     // you are required to initialize the library before using it
     auto* ascopet = ascopet::init({
-        .m_immediately_start = false,                               // immediately start the background thread
-        .m_interval          = std::chrono::milliseconds{ 100 },    // polling interval
-        .m_record_capacity   = 1024,                                // max number of records for each unique entry (by name)
-        .m_buffer_capacity   = 1024,                                // the size of the thread-local storage
+        .immediately_start = false,                             // immediately start the background thread
+        .poll_interval     = std::chrono::milliseconds{ 100 },  // polling interval
+        .record_capacity   = 1024,                              // max number of records for each unique entry (by name)
+        .buffer_capacity   = 1024,                              // the size of the thread-local storage
     });
 
-    // if m_immediately_start is false you need to start the background thread manually
+    // if immediately_start is false you need to start the background thread manually
     ascopet->start_tracing();
 
     // you can pause the background thread if you want to
@@ -48,23 +47,32 @@ int main()
 
 The function `ascopet::trace` return a `Tracer` RAII object that will record the time when it is created and the time when it is destroyed into a thread-local storage. The time is recorded is in nanoseconds (using `std::chrono::steady_clock`). `Tracer` is non-movable, non-copyable, and non-assignable. Make sure to always bind the `Tracer` object to a variable, otherwise it will be destroyed immediately and the time recorded will be meaningless.
 
-**One thing to note is that the string provided to the `ascopet::trace` function must be a static string.**
-
-> tracing a scope
+### Tracing a scope
 
 ```cpp
 #include <ascopet/ascopet.h>
 
 void foo()
 {
-    auto trace = ascopet::trace("foo");
-    // do something
+    // use custom name
+    {
+        auto trace = ascopet::trace("foo");
+        // do something
+    }
+
+    // use function name provided by std::source_location
+    {
+        auto trace = ascopet::trace();  // overload with std::source_location::current() as default argument
+        // do something
+    }
 }
 ```
 
-> Each thread that calls `ascopet::trace` will create its own thread-local storage on first call only if the library is initialized.
+Each thread that calls `ascopet::trace` will create its own thread-local storage on its first call only if the library is initialized.
 
-> getting the results
+**One thing to note is that the string provided to the `ascopet::trace` function must be a string with static lifetime.**
+
+### Getting the results
 
 ```cpp
 #include <ascopet/ascopet.h>
@@ -76,13 +84,14 @@ int main()
     // ....
 
     auto* ascopet = ascopet::instance();
+
     assert(ascopet != nullptr);
 
     // get the results but don't clear the records
     auto report = ascopet->report();
 
     // get the results and clear the records without removing the entries
-    auto report = ascopet->report_consume(false)
+    auto report = ascopet->report_consume(false);
 
     // get the results and clear the records and remove the entries
     auto report = ascopet->report_consume(true);
@@ -92,31 +101,38 @@ int main()
 }
 ```
 
-The `ascopet::report*` functions return a `Report` which is just a map of threads to a map of entries to a `TimingStat`. This `TimingStat` contains data like the mean, median, stdev, min, and max for both the scope time itself and the time between calls
+The `ascopet::report*` functions return a `Report` which is just a map of threads to a map of entries to a `TimingStat`. This `TimingStat` contains data like the mean, median, stdev, min, and max for both the scope time itself and the time between calls. The `ascopet::raw_report` function returns a `RawReport` which is just a map of threads to a map of entries to a record buffer. This operation copies the data so you can't directly modify the stored record in the `Ascopet` instance.
 
 ```cpp
 struct TimingStat
 {
     struct Stat
     {
-        Duration m_mean;
-        Duration m_median;
-        Duration m_stdev;
-        Duration m_min;
-        Duration m_max;
+        Duration mean;
+        Duration median;
+        Duration stdev;
+        Duration min;
+        Duration max;
     };
 
-    Stat        m_duration;
-    Stat        m_interval;
-    std::size_t m_count = 0;
+    Stat        duration;
+    Stat        interval;
+    std::size_t count = 0;
 };
-```
 
-The `ascopet::raw_report` function returns a `RawReport` which is just a map of threads to a map of entries to a record buffer. This operation copies the data so you can't directly modify the stored record in the `Ascopet` instance.
+struct Record
+{
+    Duration start;
+    Duration end;
+};
+
+using Report    = ThreadMap<StrMap<TimingStat>>;
+using RawReport = ThreadMap<StrMap<RingBuf<Record>>>;
+```
 
 ## Benchmark
 
-In order to measure the overhead of the library, a simple benchmark was created. The benchmark is done by creating `Tracer` object repeatedly in an empty scope in a tight loop. This loop is duplicated in multiple threads corresponds to the number of core my computer has.
+In order to measure the overhead of the library, a simple benchmark was created. The benchmark is done by creating `Tracer` object repeatedly in an empty scope in a tight loop. This loop is duplicated in multiple threads corresponds to the number of core my computer has. Baseline overhead measurement of calling two consecutive clock call and diffing them is also done.
 
 ```cpp
 // ...
@@ -130,6 +146,10 @@ The overhead is then defined as the time it takes between two calls to `ascopet:
 The following result is obtained on my Intel(R) Core(TM) i5-10500H (6 core/12 threads) with the frequency locked to 2.5 GHz:
 
 ```txt
+Baseline overhead:
+    Min: 21ns
+    Max: 79406ns
+
 Report:
     Thread 139951261918912
     > contention2
