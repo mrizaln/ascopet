@@ -12,15 +12,15 @@ namespace ascopet
 
     struct Record
     {
-        Timepoint m_start;
-        Timepoint m_end;
+        Timepoint start;
+        Timepoint end;
     };
 
     struct NamedRecord
     {
-        std::string_view m_name;
-        Timepoint        m_start;
-        Timepoint        m_end;
+        std::string_view name;
+        Timepoint        start;
+        Timepoint        end;
     };
 
     struct StrHash

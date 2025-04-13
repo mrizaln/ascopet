@@ -20,16 +20,16 @@ namespace ascopet
     {
         struct Stat
         {
-            Duration m_mean;
-            Duration m_median;
-            Duration m_stdev;
-            Duration m_min;
-            Duration m_max;
+            Duration mean;
+            Duration median;
+            Duration stdev;
+            Duration min;
+            Duration max;
         };
 
-        Stat        m_duration;
-        Stat        m_interval;
-        std::size_t m_count = 0;
+        Stat        duration;
+        Stat        interval;
+        std::size_t count;
     };
 
     class TimingList
@@ -123,10 +123,10 @@ namespace ascopet
 
     struct InitParam
     {
-        bool        m_immediately_start = false;
-        Duration    m_interval          = std::chrono::milliseconds{ 100 };
-        std::size_t m_record_capacity   = 1024;
-        std::size_t m_buffer_capacity   = 1024;
+        bool        immediately_start = false;
+        Duration    poll_interval     = std::chrono::milliseconds{ 100 };
+        std::size_t record_capacity   = 1024;
+        std::size_t buffer_capacity   = 1024;
     };
 
     Ascopet* instance();

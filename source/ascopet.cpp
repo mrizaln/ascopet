@@ -21,7 +21,7 @@ std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_
         auto [start, end] = records[i];
         durations.push_back(end - start);
         if (i > 0) {
-            auto dt = start - records[i - 1].m_start;
+            auto dt = start - records[i - 1].start;
             intervals.push_back(dt);
         }
     }
@@ -36,23 +36,23 @@ ascopet::TimingStat calculate_stat(const ascopet::RingBuf<ascopet::Record>& reco
     if (const auto size = records.size(); size == 0) {
         return {};
     } else if (size < 2) {
-        auto dur = records[0].m_end - records[0].m_start;
+        auto dur = records[0].end - records[0].start;
         return {
-            .m_duration = {
-                .m_mean   = dur,
-                .m_median = dur,
-                .m_stdev  = {},
-                .m_min    = dur,
-                .m_max    = dur,
+            .duration = {
+                .mean   = dur,
+                .median = dur,
+                .stdev  = {},
+                .min    = dur,
+                .max    = dur,
             },
-            .m_interval = {
-                .m_mean   = {},
-                .m_median = {},
-                .m_stdev  = {},
-                .m_min    = {},
-                .m_max    = {},
+            .interval = {
+                .mean   = {},
+                .median = {},
+                .stdev  = {},
+                .min    = {},
+                .max    = {},
             },
-            .m_count = 1,
+            .count = 1,
         };
     }
 
@@ -93,21 +93,21 @@ ascopet::TimingStat calculate_stat(const ascopet::RingBuf<ascopet::Record>& reco
     std::nth_element(intervals.begin(), intvl_mid, intervals.end());
 
     return {
-        .m_duration = {
-            .m_mean   = dur_mean,
-            .m_median = durations[durations.size() / 2],
-            .m_stdev  = dur_stdev,
-            .m_min    = dur_min,
-            .m_max    = dur_max,
+        .duration = {
+            .mean   = dur_mean,
+            .median = durations[durations.size() / 2],
+            .stdev  = dur_stdev,
+            .min    = dur_min,
+            .max    = dur_max,
         },
-        .m_interval = {
-            .m_mean   = intvl_mean,
-            .m_median = intervals[intervals.size() / 2],
-            .m_stdev  = intvl_stdev,
-            .m_min    = intvl_min,
-            .m_max    = intvl_max,
+        .interval = {
+            .mean   = intvl_mean,
+            .median = intervals[intervals.size() / 2],
+            .stdev  = intvl_stdev,
+            .min    = intvl_min,
+            .max    = intvl_max,
         },
-        .m_count = records.actual_count(),
+        .count = records.actual_count(),
     };
 }
 
@@ -121,12 +121,12 @@ namespace ascopet
 
     void TimingList::push_back(const NamedRecord& record)
     {
-        auto it = m_records.find(record.m_name);
+        auto it = m_records.find(record.name);
         if (it != m_records.end()) {
-            it->second.push_back({ record.m_start, record.m_end });
+            it->second.push_back({ record.start, record.end });
         } else {
-            auto [it, _] = m_records.emplace(record.m_name, m_capacity);
-            it->second.push_back({ record.m_start, record.m_end });
+            auto [it, _] = m_records.emplace(record.name, m_capacity);
+            it->second.push_back({ record.start, record.end });
         }
     }
 
@@ -179,9 +179,9 @@ namespace ascopet
     {
         if (m_buffer) {
             m_buffer->add_record({
-                .m_name  = m_name,
-                .m_start = m_start,
-                .m_end   = Clock::now(),
+                .name  = m_name,
+                .start = m_start,
+                .end   = Clock::now(),
             });
         }
     }
@@ -190,11 +190,11 @@ namespace ascopet
 namespace ascopet
 {
     Ascopet::Ascopet(InitParam&& param)
-        : m_processing{ param.m_immediately_start }
+        : m_processing{ param.immediately_start }
         , m_worker{ std::jthread([this](std::stop_token st) { worker(st); }) }
-        , m_record_capacity{ param.m_record_capacity }
-        , m_buffer_capacity{ param.m_buffer_capacity }
-        , m_process_interval{ param.m_interval }
+        , m_record_capacity{ param.record_capacity }
+        , m_buffer_capacity{ param.buffer_capacity }
+        , m_process_interval{ param.poll_interval }
     {
     }
 
