@@ -2,8 +2,8 @@
 
 #include "ascopet/ascopet.hpp"
 
+#include <array>
 #include <atomic>
-#include <memory>
 
 namespace ascopet
 {
@@ -22,9 +22,9 @@ namespace ascopet
 
         LocalBuf(Ascopet* ascopet) noexcept
             : m_ascopet{ ascopet }
-            , m_buffers{ new RingBuf<NamedRecord>[2]{
-                  { m_ascopet->record_capacity() },
-                  { m_ascopet->record_capacity() },
+            , m_buffers{ {
+                  { m_ascopet->localbuf_capacity() },
+                  { m_ascopet->localbuf_capacity() },
               } }
         {
             m_ascopet->add_localbuf(std::this_thread::get_id(), *this);
@@ -32,7 +32,7 @@ namespace ascopet
 
         ~LocalBuf() { m_ascopet->remove_localbuf(std::this_thread::get_id()); }
 
-        RingBuf<NamedRecord>& swap_buffers() noexcept
+        RingBuf<NamedRecord>& swap() noexcept
         {
             auto front = m_front.fetch_xor(1, Ord::acq_rel) ^ 1;    // emulate xor_fetch
             return m_buffers[front];
@@ -40,8 +40,9 @@ namespace ascopet
 
         bool add_record(NamedRecord&& record) noexcept
         {
-            auto back = m_front.load() ^ 1;    // access the back buffer
+            auto back = m_front.load(Ord::relaxed) ^ 1;    // access the back buffer
             m_buffers[back].push_back(std::move(record));
+            std::atomic_thread_fence(Ord::release);    // make sure record was written before swap
             return true;
         }
 
@@ -50,8 +51,7 @@ namespace ascopet
 
         Ascopet* m_ascopet = nullptr;
 
-        std::unique_ptr<RingBuf<NamedRecord>[]> m_buffers;
-        std::atomic<std::uint32_t>              m_front = 0;
-        std::atomic<bool>                       m_dirty = false;
+        std::array<RingBuf<NamedRecord>, 2> m_buffers;
+        std::atomic<std::uint64_t>          m_front = 0;
     };
 }

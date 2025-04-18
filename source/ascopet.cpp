@@ -326,7 +326,7 @@ namespace ascopet
                 auto lock  = std::unique_lock{ m_mutex };
 
                 for (auto [id, buffer] : m_buffers) {
-                    auto& records = buffer->swap_buffers();
+                    auto& records = buffer->swap();
 
                     auto it = m_records.find(id);
                     if (it == m_records.end()) {
