@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <concepts>
+#include <limits>
 #include <memory>
 #include <type_traits>
 
