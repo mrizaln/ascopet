@@ -23,13 +23,16 @@ void producer(std::stop_token st, ascopet::Duration duration, std::string_view n
 
 void contention(std::atomic<bool>& flag, std::size_t count, std::string_view name)
 {
+    auto start = ascopet::Clock::now();
     flag.wait(false);
 
     std::println(">> start {}", name);
     for (auto i = 0u; i < count; ++i) {
         auto trace = ascopet::trace(name);    // timing overhead
     }
-    std::println(">> end {}", name);
+    using Ms = std::chrono::duration<double, std::milli>;
+    auto time = [&] { return std::chrono::duration_cast<Ms>(ascopet::Clock::now() - start); };
+    std::println(">> end {} in {}", name, time());
 }
 
 void baseline_overhead(std::size_t count)
@@ -89,6 +92,9 @@ int main()
         flag.store(true);
         flag.notify_all();
 
+        std::this_thread::sleep_for(250ms);
+
+        // record capacity can be changed on the fly, but buffer capacity cannot
         ascopet->resize_record_capacity(512);
 
         std::this_thread::sleep_for(1s);
