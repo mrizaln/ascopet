@@ -1,3 +1,5 @@
+#include "rdtsc.hpp"
+
 #include "ascopet/ascopet.hpp"
 #include "ascopet/localbuf.hpp"
 
@@ -5,110 +7,118 @@
 #include <cmath>
 #include <mutex>
 
-std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_duration_interval(
-    const ascopet::RingBuf<ascopet::Record>& records
-)
+namespace
 {
-    assert(records.size() >= 2);
-
-    auto durations = std::vector<ascopet::Duration>{};
-    auto intervals = std::vector<ascopet::Duration>{};
-
-    durations.reserve(records.size());
-    intervals.reserve(records.size() - 1);
-
-    for (auto i = 0u; i < records.size(); ++i) {
-        auto [start, end] = records[i];
-        durations.push_back(end - start);
-        if (i > 0) {
-            auto dt = start - records[i - 1].start;
-            intervals.push_back(dt);
-        }
+    ascopet::Duration to_duration(std::uint64_t start, std::uint64_t end)
+    {
+        return ascopet::Duration{ (end - start) * ascopet::Duration::period::den / get_rdtsc_freq() };
     }
 
-    return { std::move(durations), std::move(intervals) };
-}
+    std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_duration_interval(
+        const ascopet::RingBuf<ascopet::Record>& records
+    )
+    {
+        assert(records.size() >= 2);
 
-ascopet::TimingStat calculate_stat(const ascopet::RingBuf<ascopet::Record>& records)
-{
-    using namespace ascopet;
+        auto durations = std::vector<ascopet::Duration>{};
+        auto intervals = std::vector<ascopet::Duration>{};
 
-    if (const auto size = records.size(); size == 0) {
-        return {};
-    } else if (size < 2) {
-        auto dur = records[0].end - records[0].start;
-        return {
-            .duration = {
-                .mean   = dur,
-                .median = dur,
-                .stdev  = {},
-                .min    = dur,
-                .max    = dur,
-            },
-            .interval = {
-                .mean   = {},
-                .median = {},
-                .stdev  = {},
-                .min    = {},
-                .max    = {},
-            },
-            .count = 1,
-        };
-    }
+        durations.reserve(records.size());
+        intervals.reserve(records.size() - 1);
 
-    auto [durations, intervals] = split_duration_interval(records);
-
-    const auto mean_stdev_min_max = [](std::span<const Duration> durations) -> std::array<Duration, 4> {
-        auto min = Duration{ std::numeric_limits<Duration::rep>::max() };
-        auto max = Duration{ std::numeric_limits<Duration::rep>::min() };
-        auto sum = Duration{ 0 };
-
-        for (auto dur : durations) {
-            sum += dur;
-            if (dur < min) {
-                min = dur;
-            } else if (dur > max) {
-                max = dur;
+        for (auto i = 0u; i < records.size(); ++i) {
+            auto [start, end] = records[i];
+            durations.push_back(to_duration(start, end));
+            if (i > 0) {
+                auto dt = to_duration(records[i - 1].start, start);
+                intervals.push_back(dt);
             }
         }
-        auto avg = sum / static_cast<Duration::rep>(durations.size());
 
-        auto diff_sum = 0.0;
-        for (auto dur : durations) {
-            auto diff  = static_cast<double>(dur.count() - avg.count());
-            diff_sum  += diff * diff;
+        return { std::move(durations), std::move(intervals) };
+    }
+
+    ascopet::TimingStat calculate_stat(const ascopet::RingBuf<ascopet::Record>& records)
+    {
+        using namespace ascopet;
+
+        if (const auto size = records.size(); size == 0) {
+            return {};
+        } else if (size < 2) {
+            auto dur = to_duration(records[0].start, records[0].end);
+            return {
+                .duration = {
+                    .mean   = dur,
+                    .median = dur,
+                    .stdev  = {},
+                    .min    = dur,
+                    .max    = dur,
+                },
+                .interval = {
+                    .mean   = {},
+                    .median = {},
+                    .stdev  = {},
+                    .min    = {},
+                    .max    = {},
+                },
+                .count = 1,
+            };
         }
-        auto stdev = std::sqrt(diff_sum / static_cast<double>(durations.size()));
 
-        return { avg, Duration{ static_cast<Duration::rep>(stdev) }, min, max };
-    };
+        auto [durations, intervals] = split_duration_interval(records);
 
-    auto [dur_mean, dur_stdev, dur_min, dur_max]         = mean_stdev_min_max(durations);
-    auto [intvl_mean, intvl_stdev, intvl_min, intvl_max] = mean_stdev_min_max(intervals);
+        const auto mean_stdev_min_max = [](std::span<const Duration> durations) -> std::array<Duration, 4> {
+            auto min = Duration{ std::numeric_limits<Duration::rep>::max() };
+            auto max = Duration{ std::numeric_limits<Duration::rep>::min() };
+            auto sum = Duration{ 0 };
 
-    auto dur_mid = durations.begin() + durations.size() / 2;
-    std::nth_element(durations.begin(), dur_mid, durations.end());
+            for (auto dur : durations) {
+                sum += dur;
+                if (dur < min) {
+                    min = dur;
+                } else if (dur > max) {
+                    max = dur;
+                }
+            }
+            auto avg = sum / static_cast<Duration::rep>(durations.size());
 
-    auto intvl_mid = intervals.begin() + intervals.size() / 2;
-    std::nth_element(intervals.begin(), intvl_mid, intervals.end());
+            auto diff_sum = 0.0;
+            for (auto dur : durations) {
+                auto diff  = static_cast<double>(dur.count() - avg.count());
+                diff_sum  += diff * diff;
+            }
+            auto stdev = std::sqrt(diff_sum / static_cast<double>(durations.size()));
 
-    return {
-        .duration = {
-            .mean   = dur_mean,
-            .median = durations[durations.size() / 2],
-            .stdev  = dur_stdev,
-            .min    = dur_min,
-            .max    = dur_max,
-        },
-        .interval = {
-            .mean   = intvl_mean,
-            .median = intervals[intervals.size() / 2],
-            .stdev  = intvl_stdev,
-            .min    = intvl_min,
-            .max    = intvl_max,
-        },
-        .count = records.actual_count(),
-    };
+            return { avg, Duration{ static_cast<Duration::rep>(stdev) }, min, max };
+        };
+
+        auto [dur_mean, dur_stdev, dur_min, dur_max]         = mean_stdev_min_max(durations);
+        auto [intvl_mean, intvl_stdev, intvl_min, intvl_max] = mean_stdev_min_max(intervals);
+
+        auto dur_mid = durations.begin() + durations.size() / 2;
+        std::nth_element(durations.begin(), dur_mid, durations.end());
+
+        auto intvl_mid = intervals.begin() + intervals.size() / 2;
+        std::nth_element(intervals.begin(), intvl_mid, intervals.end());
+
+        return {
+            .duration = {
+                .mean   = dur_mean,
+                .median = durations[durations.size() / 2],
+                .stdev  = dur_stdev,
+                .min    = dur_min,
+                .max    = dur_max,
+            },
+            .interval = {
+                .mean   = intvl_mean,
+                .median = intervals[intervals.size() / 2],
+                .stdev  = intvl_stdev,
+                .min    = intvl_min,
+                .max    = intvl_max,
+            },
+            .count = records.actual_count(),
+        };
+    }
 }
 
 namespace ascopet
@@ -171,7 +181,7 @@ namespace ascopet
     Tracer::Tracer(LocalBuf* buffer, std::string_view name)
         : m_buffer{ buffer }
         , m_name{ name }
-        , m_start{ Clock::now() }
+        , m_start{ __rdtsc() }
     {
     }
 
@@ -181,7 +191,7 @@ namespace ascopet
             m_buffer->add_record({
                 .name  = m_name,
                 .start = m_start,
-                .end   = Clock::now(),
+                .end   = __rdtsc(),
             });
         }
     }
@@ -195,6 +205,7 @@ namespace ascopet
         , m_record_capacity{ param.record_capacity }
         , m_buffer_capacity{ param.buffer_capacity }
         , m_process_interval{ param.poll_interval }
+        , m_tsc_freq{ get_rdtsc_freq() }
     {
     }
 
@@ -301,7 +312,13 @@ namespace ascopet
 
     void Ascopet::set_process_interval(Duration interval)
     {
+        auto lock          = std::unique_lock{ m_mutex };
         m_process_interval = interval;
+    }
+
+    std::uint64_t Ascopet::tsc_freq() const
+    {
+        return m_tsc_freq;
     }
 
     void Ascopet::add_localbuf(std::thread::id id, LocalBuf& buffer)
@@ -319,6 +336,8 @@ namespace ascopet
     void Ascopet::worker(std::stop_token st)
     {
         m_processing.wait(false);
+
+        using Clock = std::chrono::steady_clock;
 
         while (not st.stop_requested()) {
             auto elapsed = [this] {

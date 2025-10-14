@@ -16,6 +16,8 @@ namespace ascopet
     class LocalBuf;
     struct InitParam;
 
+    using Duration = std::chrono::duration<long, std::nano>;
+
     struct TimingStat
     {
         struct Stat
@@ -64,7 +66,7 @@ namespace ascopet
     private:
         LocalBuf*        m_buffer;
         std::string_view m_name;
-        Timepoint        m_start;
+        std::uint64_t    m_start;
     };
 
     using Report    = ThreadMap<StrMap<TimingStat>>;
@@ -99,6 +101,8 @@ namespace ascopet
         Duration process_interval() const;
         void     set_process_interval(Duration interval);
 
+        std::uint64_t tsc_freq() const;
+
     private:
         Ascopet(InitParam&& param);
 
@@ -118,7 +122,9 @@ namespace ascopet
 
         std::size_t m_record_capacity;
         std::size_t m_buffer_capacity;
-        Duration    m_process_interval;
+
+        Duration      m_process_interval;
+        std::uint64_t m_tsc_freq;
     };
 
     struct InitParam
