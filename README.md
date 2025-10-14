@@ -45,7 +45,7 @@ int main()
 }
 ```
 
-The function `ascopet::trace` return a `Tracer` RAII object that will record the time when it is created and the time when it is destroyed into a thread-local storage. The time is recorded is in nanoseconds (using `std::chrono::steady_clock`). `Tracer` is non-movable, non-copyable, and non-assignable. Make sure to always bind the `Tracer` object to a variable, otherwise it will be destroyed immediately and the time recorded will be meaningless.
+The function `ascopet::trace` return a `Tracer` RAII object that will record the time when it is created and the time when it is destroyed into a thread-local storage. The time is recorded is in timestamp counter([`rdtsc`](https://en.wikipedia.org/wiki/Time_Stamp_Counter) assuming `constant_tsc`). `Tracer` is non-movable, non-copyable, and non-assignable. Make sure to always bind the `Tracer` object to a variable, otherwise it will be destroyed immediately and the time recorded will be meaningless.
 
 ### Tracing a scope
 
@@ -132,7 +132,7 @@ using RawReport = ThreadMap<StrMap<RingBuf<Record>>>;
 
 ## Benchmark
 
-In order to measure the overhead of the library, a simple benchmark was created. The benchmark is done by creating `Tracer` object repeatedly in an empty scope in a tight loop. This loop is duplicated in multiple threads corresponds to the number of core my computer has. Baseline overhead measurement of calling two consecutive clock call and diffing them is also done.
+In order to measure the overhead of the library, a simple benchmark was created. The benchmark is done by creating `Tracer` object repeatedly in an empty scope in a tight loop. This loop is duplicated in multiple threads corresponds to the number of core my computer has.
 
 ```cpp
 // ...
@@ -146,41 +146,37 @@ The overhead is then defined as the time it takes between two calls to `ascopet:
 The following result is obtained on my Intel(R) Core(TM) i5-10500H (6 core/12 threads) with the frequency locked to 2.5 GHz:
 
 ```txt
-Baseline overhead:
-    Min: 21ns
-    Max: 79406ns
-
 Report:
-    Thread 139951261918912
-    > contention2
-        > Dur   [ mean: 26ns (+/- 1ns) | median: 27ns | min: 25ns | max: 29ns ]
-        > Intvl [ mean: 60ns (+/- 1ns) | median: 61ns | min: 59ns | max: 76ns ]
-        > Count: 12800
-    Thread 139951228348096
-    > contention6
-        > Dur   [ mean: 26ns (+/- 1ns) | median: 27ns | min: 25ns | max: 29ns ]
-        > Intvl [ mean: 60ns (+/- 1ns) | median: 61ns | min: 58ns | max: 77ns ]
-        > Count: 12800
-    Thread 139951236740800
-    > contention5
-        > Dur   [ mean: 26ns (+/- 1ns) | median: 27ns | min: 25ns | max: 29ns ]
-        > Intvl [ mean: 60ns (+/- 1ns) | median: 61ns | min: 58ns | max: 76ns ]
-        > Count: 12800
-    Thread 139951253526208
-    > contention3
-        > Dur   [ mean: 26ns (+/- 0ns) | median: 27ns | min: 25ns | max: 29ns ]
-        > Intvl [ mean: 61ns (+/- 1ns) | median: 61ns | min: 58ns | max: 65ns ]
-        > Count: 12800
-    Thread 139951245133504
-    > contention4
-        > Dur   [ mean: 27ns (+/- 0ns) | median: 27ns | min: 25ns | max: 30ns ]
-        > Intvl [ mean: 60ns (+/- 1ns) | median: 61ns | min: 58ns | max: 78ns ]
-        > Count: 14336
-    Thread 139951270311616
+    Thread 139900365170368
     > contention1
-        > Dur   [ mean: 26ns (+/- 1ns) | median: 27ns | min: 25ns | max: 30ns ]
-        > Intvl [ mean: 60ns (+/- 1ns) | median: 61ns | min: 58ns | max: 77ns ]
-        > Count: 15872
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 12ns ]
+        > Intvl [ mean: 20ns (+/- 0ns) | median: 20ns | min: 19ns | max: 23ns ]
+        > Count: 92160
+    Thread 139900348384960
+    > contention3
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 9ns | min: 8ns | max: 15ns ]
+        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 40ns ]
+        > Count: 92160
+    Thread 139900323206848
+    > contention6
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 12ns ]
+        > Intvl [ mean: 20ns (+/- 2ns) | median: 20ns | min: 19ns | max: 41ns ]
+        > Count: 92160
+    Thread 139900339992256
+    > contention4
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 9ns | min: 8ns | max: 14ns ]
+        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 40ns ]
+        > Count: 92160
+    Thread 139900356777664
+    > contention2
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 12ns ]
+        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 40ns ]
+        > Count: 92160
+    Thread 139900331599552
+    > contention5
+        > Dur   [ mean: 11ns (+/- 1ns) | median: 12ns | min: 9ns | max: 15ns ]
+        > Intvl [ mean: 30ns (+/- 1ns) | median: 31ns | min: 20ns | max: 53ns ]
+        > Count: 92160
 ```
 
 The code used to measure the overhead is [here](example/source/trace.cpp).
