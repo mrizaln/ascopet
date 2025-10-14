@@ -1,11 +1,14 @@
 #include <ascopet/ascopet.hpp>
 
+#include <chrono>
 #include <format>
 #include <print>
 #include <stop_token>
 #include <thread>
 
 using namespace std::chrono_literals;
+
+using Clock = std::chrono::steady_clock;
 
 void producer(std::stop_token st, ascopet::Duration duration, std::string_view name)
 {
@@ -23,29 +26,29 @@ void producer(std::stop_token st, ascopet::Duration duration, std::string_view n
 
 void contention(std::atomic<bool>& flag, std::size_t count, std::string_view name)
 {
-    auto start = ascopet::Clock::now();
+    auto start = Clock::now();
     flag.wait(false);
 
     std::println(">> start {}", name);
     for (auto i = 0u; i < count; ++i) {
         auto trace = ascopet::trace(name);    // timing overhead
     }
-    using Ms = std::chrono::duration<double, std::milli>;
-    auto time = [&] { return std::chrono::duration_cast<Ms>(ascopet::Clock::now() - start); };
+    using Ms  = std::chrono::duration<double, std::milli>;
+    auto time = [&] { return std::chrono::duration_cast<Ms>(Clock::now() - start); };
     std::println(">> end {} in {}", name, time());
 }
 
 void baseline_overhead(std::size_t count)
 {
-    auto min_rep = std::numeric_limits<ascopet::Clock::rep>::max();
-    auto max_rep = std::numeric_limits<ascopet::Clock::rep>::min();
+    auto min_rep = std::numeric_limits<Clock::rep>::max();
+    auto max_rep = std::numeric_limits<Clock::rep>::min();
 
     auto min = ascopet::Duration{ min_rep };
     auto max = ascopet::Duration{ max_rep };
 
     while (count-- > 0) {
-        auto t1 = ascopet::Clock::now();
-        auto t2 = ascopet::Clock::now();
+        auto t1 = Clock::now();
+        auto t2 = Clock::now();
 
         auto diff = t2 - t1;
 
