@@ -10,7 +10,7 @@ Performance optimization is a common task in C++ programming. One of the thing t
 
 - Simple
 - C++20 compatible
-- Minimal overhead (**60ns** of overhead per scope measurement on 2.5GHz x86_64 Linux machine)
+- Minimal overhead (**20ns** of overhead per scope measurement on 2.5GHz x86_64 Linux machine)
 - Asynchronous timing handling
 
 ## Usage
@@ -143,40 +143,42 @@ for (auto i = 0u; i < count; ++i) {
 
 The overhead is then defined as the time it takes between two calls to `ascopet::trace`.
 
-The following result is obtained on my Intel(R) Core(TM) i5-10500H (6 core/12 threads) with the frequency locked to 2.5 GHz:
+The following result is obtained by running [this code](./example/source/trace.cpp) on my Intel(R) Core(TM) i5-10500H (6 core/12 threads) with the frequency locked to 2.5 GHz:
 
 ```txt
-Report:
-    Thread 139900365170368
-    > contention1
-        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 12ns ]
-        > Intvl [ mean: 20ns (+/- 0ns) | median: 20ns | min: 19ns | max: 23ns ]
-        > Count: 92160
-    Thread 139900348384960
-    > contention3
-        > Dur   [ mean: 9ns (+/- 0ns) | median: 9ns | min: 8ns | max: 15ns ]
-        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 40ns ]
-        > Count: 92160
-    Thread 139900323206848
-    > contention6
-        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 12ns ]
-        > Intvl [ mean: 20ns (+/- 2ns) | median: 20ns | min: 19ns | max: 41ns ]
-        > Count: 92160
-    Thread 139900339992256
-    > contention4
-        > Dur   [ mean: 9ns (+/- 0ns) | median: 9ns | min: 8ns | max: 14ns ]
-        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 40ns ]
-        > Count: 92160
-    Thread 139900356777664
+tsc_freq: 2495976000 Hz (2495.9758 MHz)
+
+contention_test:
+    Thread 140576355825344
     > contention2
-        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 12ns ]
-        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 40ns ]
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 14ns ]
+        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 38ns ]
         > Count: 92160
-    Thread 139900331599552
+    Thread 140576347432640
+    > contention3
+        > Dur   [ mean: 9ns (+/- 1ns) | median: 10ns | min: 8ns | max: 14ns ]
+        > Intvl [ mean: 20ns (+/- 2ns) | median: 20ns | min: 19ns | max: 40ns ]
+        > Count: 92160
+    Thread 140576322254528
+    > contention6
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 13ns ]
+        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 20ns | max: 39ns ]
+        > Count: 92160
+    Thread 140576339039936
+    > contention4
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 13ns ]
+        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 19ns | max: 42ns ]
+        > Count: 92160
+    Thread 140576364218048
+    > contention1
+        > Dur   [ mean: 10ns (+/- 1ns) | median: 10ns | min: 8ns | max: 15ns ]
+        > Intvl [ mean: 25ns (+/- 2ns) | median: 25ns | min: 20ns | max: 36ns ]
+        > Count: 92160
+    Thread 140576330647232
     > contention5
-        > Dur   [ mean: 11ns (+/- 1ns) | median: 12ns | min: 9ns | max: 15ns ]
-        > Intvl [ mean: 30ns (+/- 1ns) | median: 31ns | min: 20ns | max: 53ns ]
-        > Count: 92160
+        > Dur   [ mean: 9ns (+/- 0ns) | median: 10ns | min: 8ns | max: 13ns ]
+        > Intvl [ mean: 20ns (+/- 1ns) | median: 20ns | min: 20ns | max: 37ns ]
+        > Count: 102400
 ```
 
 The code used to measure the overhead is [here](example/source/trace.cpp).
