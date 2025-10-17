@@ -10,6 +10,35 @@ using namespace std::chrono_literals;
 
 using Clock = std::chrono::steady_clock;
 
+template <typename Duration>
+void print_report(std::thread::id id, const ascopet::StrMap<ascopet::TimingStat>& timings)
+{
+    auto to_duration = [](auto dur) { return std::chrono::duration_cast<Duration>(dur); };
+
+    std::println("\tThread {}", id);
+    for (const auto& [name, timing] : timings) {
+        auto [dur, intvl, count] = timing;
+        std::println("\t> {}", name);
+        std::println(
+            "\t\t> Dur   [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
+            to_duration(dur.mean),
+            to_duration(dur.stdev),
+            to_duration(dur.median),
+            to_duration(dur.min),
+            to_duration(dur.max)
+        );
+        std::println(
+            "\t\t> Intvl [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
+            to_duration(intvl.mean),
+            to_duration(intvl.stdev),
+            to_duration(intvl.median),
+            to_duration(intvl.min),
+            to_duration(intvl.max)
+        );
+        std::println("\t\t> Count: {}", count);
+    }
+}
+
 void producer(std::stop_token st, ascopet::Duration duration, std::string_view name)
 {
     std::this_thread::sleep_for(duration * 10);
@@ -38,46 +67,12 @@ void contention(std::atomic<bool>& flag, std::size_t count, std::string_view nam
     std::println(">> end {} in {}", name, time());
 }
 
-void baseline_overhead(std::size_t count)
+void contention_test()
 {
-    auto min_rep = std::numeric_limits<Clock::rep>::max();
-    auto max_rep = std::numeric_limits<Clock::rep>::min();
-
-    auto min = ascopet::Duration{ min_rep };
-    auto max = ascopet::Duration{ max_rep };
-
-    while (count-- > 0) {
-        auto t1 = Clock::now();
-        auto t2 = Clock::now();
-
-        auto diff = t2 - t1;
-
-        if (diff < min) {
-            min = diff;
-        }
-        if (diff > max) {
-            max = diff;
-        }
-    }
-
-    std::println("Baseline overhead:");
-    std::println("\tMin: {}", min);
-    std::println("\tMax: {}", max);
-}
-
-int main()
-{
-    auto ascopet = ascopet::init({
-        .immediately_start = true,
-        .poll_interval     = 25ms,
-        .buffer_capacity   = 10240,
-    });
-
-    auto flag = std::atomic<bool>{ false };
+    auto ascopet = ascopet::instance();
+    auto flag    = std::atomic<bool>{ false };
 
     {
-        baseline_overhead(1'000'000);
-
         // auto thread1 = std::jthread{ producer, 10ms, "1" };
         // auto thread2 = std::jthread{ producer, 11ms, "2" };
         // auto thread3 = std::jthread{ producer, 12ms, "3" };
@@ -103,29 +98,54 @@ int main()
         std::this_thread::sleep_for(1s);
     }
 
-    std::println("\nReport:");
+    std::println("\ncontention_test:");
     for (const auto& [id, traces] : ascopet->report()) {
-        std::println("\tThread {}", id);
-        for (const auto& [name, timing] : traces) {
-            auto [dur, intvl, count] = timing;
-            std::println("\t> {}", name);
-            std::println(
-                "\t\t> Dur   [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
-                dur.mean,
-                dur.stdev,
-                dur.median,
-                dur.min,
-                dur.max
-            );
-            std::println(
-                "\t\t> Intvl [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
-                intvl.mean,
-                intvl.stdev,
-                intvl.median,
-                intvl.min,
-                intvl.max
-            );
-            std::println("\t\t> Count: {}", count);
-        }
+        print_report<std::chrono::nanoseconds>(id, traces);
     }
+}
+
+void sleep_test()
+{
+    using namespace std::chrono_literals;
+
+    auto ascopet   = ascopet::instance();
+    auto durations = { 1ms, 10ms, 100ms, 1000ms };
+
+    auto sleep_func = [](std::chrono::milliseconds dur) {
+        for (auto i = 0; i < 10000 / dur.count(); ++i) {
+            auto trace = ascopet::trace("sleep");
+            std::this_thread::sleep_for(dur);
+        }
+    };
+
+    std::println("");
+
+    for (auto dur : durations) {
+        ascopet->clear(true);
+
+        std::println("sleep_test: {}", dur);
+
+        sleep_func(dur);
+
+        const auto id = std::this_thread::get_id();
+        print_report<std::chrono::duration<float, std::milli>>(id, ascopet->report()[id]);
+    }
+}
+
+int main()
+{
+    auto ascopet = ascopet::init({
+        .immediately_start = true,
+        .poll_interval     = 25ms,
+        .buffer_capacity   = 10240,
+    });
+
+    std::println(
+        "tsc_freq: {} Hz ({} MHz)\n",
+        ascopet->tsc_freq(),
+        static_cast<float>(ascopet->tsc_freq()) / std::micro::den
+    );
+
+    contention_test();
+    sleep_test();
 }
