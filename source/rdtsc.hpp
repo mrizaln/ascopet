@@ -11,17 +11,16 @@
 // https://hero.handmade.network/forums/code-discussion/t/7485-queryperformancefrequency_returning_10mhz_bug/2
 // https://learn.microsoft.com/en-us/virtualization/hyper-v-on-windows/tlfs/timers#partition-reference-tsc-mechanism
 
-#    include <cstdint>
+#include <cstdint>
 
-#    define WIN32_LEAN_AND_MEAN
-#    define VC_EXTRALEAN
-#    define NOMINMAX
-#    include <Windows.h>
-#    include <intrin.h>
+#define WIN32_LEAN_AND_MEAN
+#define VC_EXTRALEAN
+#define NOMINMAX
+#include <Windows.h>
+#include <intrin.h>
 
 inline uint64_t get_rdtsc_freq(void)
 {
-
     // Cache the answer so that multiple calls never take the slow path more than once
     static uint64_t tsc_freq = 0;
     if (tsc_freq) {
@@ -31,7 +30,6 @@ inline uint64_t get_rdtsc_freq(void)
     // Fast path: Load kernel-mapped memory page
     HMODULE ntdll = LoadLibraryA("ntdll.dll");
     if (ntdll) {
-
         int (*NtQuerySystemInformation)(int, void*, unsigned int, unsigned int*)
             = (int (*)(int, void*, unsigned int, unsigned int*)
             )GetProcAddress(ntdll, "NtQuerySystemInformation");
@@ -62,7 +60,6 @@ inline uint64_t get_rdtsc_freq(void)
 
     // Slow path
     if (!tsc_freq) {
-
         // Get time before sleep
         uint64_t qpc_begin = 0;
         QueryPerformanceCounter((LARGE_INTEGER*)&qpc_begin);
@@ -94,18 +91,17 @@ inline uint64_t get_rdtsc_freq(void)
 // https://linux.die.net/man/2/perf_event_open
 // https://stackoverflow.com/a/57835630
 
-#    include <linux/perf_event.h>
-#    include <sys/mman.h>
+#include <linux/perf_event.h>
+#include <sys/mman.h>
 
-#    include <unistd.h>
-#    include <x86intrin.h>
+#include <unistd.h>
+#include <x86intrin.h>
 
-#    include <cstdint>
-#    include <ctime>
+#include <cstdint>
+#include <ctime>
 
 inline uint64_t get_rdtsc_freq(void)
 {
-
     // Cache the answer so that multiple calls never take the slow path more than once
     static uint64_t tsc_freq = 0;
     if (tsc_freq) {
@@ -124,21 +120,21 @@ inline uint64_t get_rdtsc_freq(void)
     // __NR_perf_event_open == 298 (on x86_64)
     int fd = syscall(298, &pe, 0, -1, -1, 0);
     if (fd != -1) {
-
         struct perf_event_mmap_page* pc = (struct perf_event_mmap_page*)mmap(
             NULL, 4096, PROT_READ, MAP_SHARED, fd, 0
         );
         if (pc) {
-
             // success
             if (pc->cap_user_time == 1) {
                 // docs say nanoseconds = (tsc * time_mult) >> time_shift
                 //      set nanoseconds = 1000000000 = 1 second in nanoseconds, solve for tsc
                 //       =>         tsc = 1000000000 / (time_mult >> time_shift)
+#ifdef __SIZEOF_INT128__
+                tsc_freq = ((__uint128_t)1'000'000'000ull << (__uint128_t)pc->time_shift) / pc->time_mult;
+#else
                 tsc_freq = (1'000'000'000ull << (pc->time_shift / 2))
                          / (pc->time_mult >> (pc->time_shift - pc->time_shift / 2));
-                // If your build configuration supports 128 bit arithmetic, do this:
-                // tsc_freq = ((__uint128_t)1000000000ull << (__uint128_t)pc->time_shift) / pc->time_mult;
+#endif
             }
             munmap(pc, 4096);
         }
@@ -147,7 +143,6 @@ inline uint64_t get_rdtsc_freq(void)
 
     // Slow path
     if (!tsc_freq) {
-
         // Get time before sleep
         uint64_t nsc_begin = 0;
         {
