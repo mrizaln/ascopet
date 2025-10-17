@@ -43,7 +43,7 @@ namespace ascopet
         void clear(bool remove_entries);
         void resize(std::size_t new_capacity);
 
-        StrMap<TimingStat>      stat() const;
+        StrMap<TimingStat>      stat(std::uint64_t freq) const;
         StrMap<RingBuf<Record>> records() const;
 
     private:

@@ -9,13 +9,14 @@
 
 namespace
 {
-    ascopet::Duration to_duration(std::uint64_t start, std::uint64_t end)
+    ascopet::Duration to_duration(std::uint64_t start, std::uint64_t end, std::uint64_t freq)
     {
-        return ascopet::Duration{ (end - start) * ascopet::Duration::period::den / get_rdtsc_freq() };
+        return ascopet::Duration{ (end - start) * ascopet::Duration::period::den / freq };
     }
 
     std::pair<std::vector<ascopet::Duration>, std::vector<ascopet::Duration>> split_duration_interval(
-        const ascopet::RingBuf<ascopet::Record>& records
+        const ascopet::RingBuf<ascopet::Record>& records,
+        std::uint64_t                            freq
     )
     {
         assert(records.size() >= 2);
@@ -28,9 +29,9 @@ namespace
 
         for (auto i = 0u; i < records.size(); ++i) {
             auto [start, end] = records[i];
-            durations.push_back(to_duration(start, end));
+            durations.push_back(to_duration(start, end, freq));
             if (i > 0) {
-                auto dt = to_duration(records[i - 1].start, start);
+                auto dt = to_duration(records[i - 1].start, start, freq);
                 intervals.push_back(dt);
             }
         }
@@ -38,14 +39,14 @@ namespace
         return { std::move(durations), std::move(intervals) };
     }
 
-    ascopet::TimingStat calculate_stat(const ascopet::RingBuf<ascopet::Record>& records)
+    ascopet::TimingStat calculate_stat(const ascopet::RingBuf<ascopet::Record>& records, std::uint64_t freq)
     {
         using namespace ascopet;
 
         if (const auto size = records.size(); size == 0) {
             return {};
         } else if (size < 2) {
-            auto dur = to_duration(records[0].start, records[0].end);
+            auto dur = to_duration(records[0].start, records[0].end, freq);
             return {
                 .duration = {
                     .mean   = dur,
@@ -65,7 +66,7 @@ namespace
             };
         }
 
-        auto [durations, intervals] = split_duration_interval(records);
+        auto [durations, intervals] = split_duration_interval(records, freq);
 
         const auto mean_stdev_min_max = [](std::span<const Duration> durations) -> std::array<Duration, 4> {
             auto min = Duration{ std::numeric_limits<Duration::rep>::max() };
@@ -161,11 +162,11 @@ namespace ascopet
         }
     }
 
-    StrMap<TimingStat> TimingList::stat() const
+    StrMap<TimingStat> TimingList::stat(std::uint64_t freq) const
     {
         auto reports = StrMap<TimingStat>{};
         for (const auto& [name, records] : m_records) {
-            reports.emplace(name, calculate_stat(records));
+            reports.emplace(name, calculate_stat(records, freq));
         }
         return reports;
     }
@@ -226,7 +227,7 @@ namespace ascopet
         auto report = ThreadMap<StrMap<TimingStat>>{};
         auto lock   = std::shared_lock{ m_mutex };
         for (const auto& [id, records] : m_records) {
-            report.emplace(id, records.stat());
+            report.emplace(id, records.stat(m_tsc_freq));
         }
         return report;
     }
@@ -236,7 +237,7 @@ namespace ascopet
         auto report = ThreadMap<StrMap<TimingStat>>{};
         auto lock   = std::shared_lock{ m_mutex };
         for (auto& [id, records] : m_records) {
-            report.emplace(id, records.stat());
+            report.emplace(id, records.stat(m_tsc_freq));
             records.clear(remove_entries);
         }
         if (remove_entries) {
