@@ -397,7 +397,7 @@ namespace ascopet
 
     Tracer trace(std::string_view name)
     {
-        if (auto ptr = instance(); ptr != nullptr) {
+        if (auto ptr = instance(); ptr != nullptr and ptr->is_tracing()) {
             static thread_local auto buffer = LocalBuf{ ptr };
             return { &buffer, name };
         }
