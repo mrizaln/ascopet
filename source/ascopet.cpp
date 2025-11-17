@@ -1,4 +1,6 @@
+#if not defined(ASCOPET_DISABLE_RDTSC)
 #include "rdtsc.hpp"
+#endif
 
 #include "ascopet/ascopet.hpp"
 #include "ascopet/localbuf.hpp"
@@ -6,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+
+using Fallback = std::chrono::steady_clock;
 
 namespace
 {
@@ -182,7 +186,11 @@ namespace ascopet
     Tracer::Tracer(LocalBuf* buffer, std::string_view name)
         : m_buffer{ buffer }
         , m_name{ name }
+#if not defined(ASCOPET_DISABLE_RDTSC)
         , m_start{ __rdtsc() }
+#else
+        , m_start{ static_cast<std::uint64_t>(Fallback::now().time_since_epoch().count()) }
+#endif
     {
     }
 
@@ -192,7 +200,11 @@ namespace ascopet
             m_buffer->add_record({
                 .name  = m_name,
                 .start = m_start,
-                .end   = __rdtsc(),
+#if not defined(ASCOPET_DISABLE_RDTSC)
+                .end = __rdtsc(),
+#else
+                .end = static_cast<std::uint64_t>(Fallback::now().time_since_epoch().count()),
+#endif
             });
         }
     }
@@ -206,7 +218,11 @@ namespace ascopet
         , m_record_capacity{ param.record_capacity }
         , m_buffer_capacity{ param.buffer_capacity }
         , m_process_interval{ param.poll_interval }
+#if not defined(ASCOPET_DISABLE_RDTSC)
         , m_tsc_freq{ get_rdtsc_freq() }
+#else
+        , m_tsc_freq{ Fallback::period::den }
+#endif
     {
     }
 

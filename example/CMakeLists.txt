@@ -11,6 +11,8 @@ find_package(fmt REQUIRED)
 
 # include(cmake/fetched-libs.cmake)
 
+# toggle this to ON to try to use fallback instead
+option(ASCOPET_DISABLE_RDTSC "disable rdtsc" OFF)
 add_subdirectory(lib/ascopet)
 
 function(create_exe name)
