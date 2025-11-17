@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <span>
+#include <vector>
 
 using Fallback = std::chrono::steady_clock;
 
