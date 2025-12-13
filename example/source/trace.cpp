@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <format>
-#include <print>
 #include <stop_token>
 #include <thread>
 
@@ -10,16 +9,23 @@ using namespace std::chrono_literals;
 
 using Clock = std::chrono::steady_clock;
 
+// No println in C++20 yet
+template <typename... Args>
+void println(std::format_string<Args...> fmt, Args&&... args)
+{
+    std::puts(std::format(fmt, std::forward<Args>(args)...).c_str());
+}
+
 template <typename Duration>
 void print_report(std::thread::id id, const ascopet::StrMap<ascopet::TimingStat>& timings)
 {
     auto to_duration = [](auto dur) { return std::chrono::duration_cast<Duration>(dur); };
 
-    std::println("\tThread {}", id);
+    println("\tThread {}", std::hash<decltype(id)>{}(id));    // only in C++23 thread::id has format spec
     for (const auto& [name, timing] : timings) {
         auto [dur, intvl, count] = timing;
-        std::println("\t> {}", name);
-        std::println(
+        println("\t> {}", name);
+        println(
             "\t\t> Dur   [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
             to_duration(dur.mean),
             to_duration(dur.stdev),
@@ -27,7 +33,7 @@ void print_report(std::thread::id id, const ascopet::StrMap<ascopet::TimingStat>
             to_duration(dur.min),
             to_duration(dur.max)
         );
-        std::println(
+        println(
             "\t\t> Intvl [ mean: {} (+/- {}) | median: {} | min: {} | max: {} ]",
             to_duration(intvl.mean),
             to_duration(intvl.stdev),
@@ -35,7 +41,7 @@ void print_report(std::thread::id id, const ascopet::StrMap<ascopet::TimingStat>
             to_duration(intvl.min),
             to_duration(intvl.max)
         );
-        std::println("\t\t> Count: {}", count);
+        println("\t\t> Count: {}", count);
     }
 }
 
@@ -47,10 +53,10 @@ void producer(std::stop_token st, ascopet::Duration duration, std::string_view n
         auto trace = ascopet::trace(name);
 
         std::this_thread::sleep_for(duration);
-        std::println(">> {}", name);
+        println(">> {}", name);
     }
 
-    std::println(">> end {}", name);
+    println(">> end {}", name);
 }
 
 void contention(std::atomic<bool>& flag, std::size_t count, std::string_view name)
@@ -59,7 +65,7 @@ void contention(std::atomic<bool>& flag, std::size_t count, std::string_view nam
 
     auto start = Clock::now();
 
-    std::println(">> start {}", name);
+    println(">> start {}", name);
     for (auto i = 0u; i < count; ++i) {
         auto trace = ascopet::trace(name);    // timing overhead
     }
@@ -68,7 +74,7 @@ void contention(std::atomic<bool>& flag, std::size_t count, std::string_view nam
     auto to_ms = [&](auto dur) { return std::chrono::duration_cast<Ms>(dur); };
 
     auto duration = Clock::now() - start;
-    std::println(">> end {} in {} ({}/iter)", name, to_ms(duration), duration / count);
+    println(">> end {} in {} ({}/iter)", name, to_ms(duration), duration / count);
 }
 
 void single_test(std::size_t count)
@@ -103,12 +109,16 @@ void contention_test(std::size_t count)
     }
 
     if (auto ascopet = ascopet::instance(); ascopet and ascopet->is_tracing()) {
-        std::println("\ncontention_test:");
-        for (const auto& [id, traces] : ascopet->report()) {
-            print_report<std::chrono::nanoseconds>(id, traces);
+        println("\ncontention_test:");
+        if (auto report = ascopet->report(); report.empty()) {
+            println("\nempty");
+        } else {
+            for (const auto& [id, traces] : report) {
+                print_report<std::chrono::nanoseconds>(id, traces);
+            }
         }
     } else {
-        std::println("\ncontention_test: not initialized or not tracing");
+        println("\ncontention_test: not initialized or not tracing");
     }
 }
 
@@ -126,12 +136,12 @@ void sleep_test()
         }
     };
 
-    std::println("");
+    println("");
 
     for (auto dur : durations) {
         ascopet->clear(true);
 
-        std::println("sleep_test: {}", dur);
+        println("sleep_test: {}", dur);
 
         sleep_func(dur);
 
@@ -142,14 +152,14 @@ void sleep_test()
 
 int main()
 {
-    static constexpr auto count = 10'240'000uz;
+    static constexpr auto count = 10'240'000ull;
 
-    std::println("\n{:-^80}", "uninitialized");
+    println("\n{:-^80}", "uninitialized");
     single_test(count);
-    std::println("");
+    println("");
     contention_test(count);
 
-    std::println("\n{:-^80}", "init");
+    println("\n{:-^80}", "init");
     auto ascopet = ascopet::init({
         .immediately_start = true,
         .poll_interval     = 25ms,
@@ -161,22 +171,22 @@ int main()
     ascopet->resize_record_capacity(512);
 
     // trace data are recorded using rdtsc, which you can check the frequency using this
-    std::println(
+    println(
         "tsc_freq: {} Hz ({} MHz)",
         ascopet->tsc_freq(),
         static_cast<float>(ascopet->tsc_freq()) / std::mega::num
     );
 
-    std::println("\n{:-^80}", "paused");
+    println("\n{:-^80}", "paused");
     ascopet->pause_tracing();
     single_test(count);
-    std::println("");
+    println("");
     contention_test(count);
 
-    std::println("\n{:-^80}", "running");
+    println("\n{:-^80}", "running");
     ascopet->start_tracing();
     single_test(count);
-    std::println("");
+    println("");
     contention_test(count);
     // sleep_test();
 }

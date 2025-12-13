@@ -1,24 +1,11 @@
-cmake_minimum_required(VERSION 3.16)
-project(ascopet_example VERSION 0.1.0)
+add_executable(trace source/trace.cpp)
+target_include_directories(trace PRIVATE source)
+target_link_libraries(trace PRIVATE ascopet)
+target_compile_options(trace PRIVATE -Wall -Wextra -Wconversion)
 
+target_compile_features(ascopet PUBLIC cxx_std_20)
+set_target_properties(ascopet PROPERTIES CXX_EXTENSIONS OFF)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# toggle this to ON to try to use fallback instead
-option(ASCOPET_DISABLE_RDTSC "disable rdtsc" OFF)
-add_subdirectory(lib/ascopet)
-
-function(create_exe name)
-    add_executable(${name} source/${name}.cpp)
-    target_include_directories(${name} PRIVATE source)
-    target_link_libraries(${name} PRIVATE ascopet)
-    target_compile_options(${name} PRIVATE -Wall -Wextra -Wconversion)
-
-    ## sanitizer
-    #target_compile_options(${name} PRIVATE -fsanitize=address,leak,undefined)
-    #target_link_options(${name} PRIVATE -fsanitize=address,leak,undefined)
-endfunction()
-
-create_exe(trace)
+## sanitizer
+#target_compile_options(trace PRIVATE -fsanitize=address,leak,undefined)
+#target_link_options(trace PRIVATE -fsanitize=address,leak,undefined)
