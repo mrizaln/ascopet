@@ -232,9 +232,17 @@ namespace ascopet
     {
         m_worker.request_stop();
 
-        // need to do this to wake up the worker thread in case it's waiting
-        m_processing.store(true, std::memory_order::release);
-        m_processing.notify_one();
+        // NOTE: Even if the shared variable is atomic, it must be modified under the mutex in order to
+        // correctly publish the modification to the waiting thread
+        {
+            auto lock = std::lock_guard{ m_cond_mutex };
+
+            // need to do this to wake up the worker thread in case it's waiting
+            m_processing.store(true, std::memory_order::release);
+            m_processing.notify_one();
+        }
+
+        m_cv.notify_all();
 
         m_worker.join();
         m_processing.store(false, std::memory_order::release);
@@ -243,7 +251,7 @@ namespace ascopet
     ascopet::Report Ascopet::report() const
     {
         auto report = ThreadMap<StrMap<TimingStat>>{};
-        auto lock   = std::shared_lock{ m_mutex };
+        auto lock   = std::shared_lock{ m_data_mutex };
         for (const auto& [id, records] : m_records) {
             report.emplace(id, records.stat(m_tsc_freq));
         }
@@ -253,7 +261,7 @@ namespace ascopet
     ascopet::Report Ascopet::report_consume(bool remove_entries)
     {
         auto report = ThreadMap<StrMap<TimingStat>>{};
-        auto lock   = std::shared_lock{ m_mutex };
+        auto lock   = std::shared_lock{ m_data_mutex };
         for (auto& [id, records] : m_records) {
             report.emplace(id, records.stat(m_tsc_freq));
             records.clear(remove_entries);
@@ -266,7 +274,7 @@ namespace ascopet
 
     ascopet::RawReport Ascopet::raw_report() const
     {
-        auto lock    = std::shared_lock{ m_mutex };
+        auto lock    = std::shared_lock{ m_data_mutex };
         auto records = ThreadMap<StrMap<RingBuf<Record>>>{};
         for (const auto& [id, timing_list] : m_records) {
             records.emplace(id, timing_list.records());
@@ -276,7 +284,7 @@ namespace ascopet
 
     void Ascopet::clear(bool remove_entries)
     {
-        auto lock = std::unique_lock{ m_mutex };
+        auto lock = std::unique_lock{ m_data_mutex };
         for (auto& [id, records] : m_records) {
             records.clear(remove_entries);
         }
@@ -304,19 +312,19 @@ namespace ascopet
 
     std::size_t Ascopet::record_capacity() const
     {
-        auto lock = std::shared_lock{ m_mutex };
+        auto lock = std::shared_lock{ m_data_mutex };
         return m_record_capacity;
     }
 
     std::size_t Ascopet::localbuf_capacity() const
     {
-        auto lock = std::shared_lock{ m_mutex };
+        auto lock = std::shared_lock{ m_data_mutex };
         return m_buffer_capacity;
     }
 
     void Ascopet::resize_record_capacity(std::size_t capacity)
     {
-        auto lock         = std::unique_lock{ m_mutex };
+        auto lock         = std::unique_lock{ m_data_mutex };
         m_record_capacity = capacity;
         for (auto& [id, records] : m_records) {
             records.resize(capacity);
@@ -325,13 +333,13 @@ namespace ascopet
 
     ascopet::Duration Ascopet::process_interval() const
     {
-        auto lock = std::shared_lock{ m_mutex };
+        auto lock = std::shared_lock{ m_data_mutex };
         return m_process_interval;
     }
 
     void Ascopet::set_process_interval(Duration interval)
     {
-        auto lock          = std::unique_lock{ m_mutex };
+        auto lock          = std::unique_lock{ m_data_mutex };
         m_process_interval = interval;
     }
 
@@ -342,13 +350,13 @@ namespace ascopet
 
     void Ascopet::add_localbuf(std::thread::id id, LocalBuf& buffer)
     {
-        auto lock = std::unique_lock{ m_mutex };
+        auto lock = std::unique_lock{ m_data_mutex };
         m_buffers.emplace(id, &buffer);
     }
 
     void Ascopet::remove_localbuf(std::thread::id id)
     {
-        auto lock = std::unique_lock{ m_mutex };
+        auto lock = std::unique_lock{ m_data_mutex };
         m_buffers.erase(id);
     }
 
@@ -361,7 +369,7 @@ namespace ascopet
         while (not st.stop_requested()) {
             auto elapsed = [this] {
                 auto start = Clock::now();
-                auto lock  = std::unique_lock{ m_mutex };
+                auto lock  = std::unique_lock{ m_data_mutex };
 
                 for (auto [id, buffer] : m_buffers) {
                     auto& records = buffer->swap();
@@ -383,7 +391,11 @@ namespace ascopet
                 return Clock::now() - start;
             }();
 
-            std::this_thread::sleep_for(m_process_interval - elapsed);
+            {
+                auto lock = std::unique_lock{ m_cond_mutex };
+                m_cv.wait_for(lock, m_process_interval - elapsed);
+            }
+
             m_processing.wait(false);
         }
     }

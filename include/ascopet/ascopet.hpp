@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <shared_mutex>
 #include <source_location>
 #include <stop_token>
@@ -14,7 +15,6 @@
 namespace ascopet
 {
     class LocalBuf;
-    struct InitParam;
 
     using Duration = std::chrono::duration<long, std::nano>;
 
@@ -72,6 +72,14 @@ namespace ascopet
     using Report    = ThreadMap<StrMap<TimingStat>>;
     using RawReport = ThreadMap<StrMap<RingBuf<Record>>>;
 
+    struct InitParam
+    {
+        bool        immediately_start = false;
+        Duration    poll_interval     = std::chrono::milliseconds{ 100 };
+        std::size_t record_capacity   = 1024;
+        std::size_t buffer_capacity   = 1024;
+    };
+
     class Ascopet
     {
     public:
@@ -113,8 +121,11 @@ namespace ascopet
 
         static std::unique_ptr<Ascopet> s_instance;
 
-        mutable std::shared_mutex m_mutex;
-        ThreadMap<TimingList>     m_records;
+        mutable std::shared_mutex m_data_mutex;
+        mutable std::mutex        m_cond_mutex;
+        std::condition_variable   m_cv;
+
+        ThreadMap<TimingList> m_records;
 
         std::atomic<bool>    m_processing;
         std::jthread         m_worker;
@@ -125,14 +136,6 @@ namespace ascopet
 
         Duration      m_process_interval;
         std::uint64_t m_tsc_freq;
-    };
-
-    struct InitParam
-    {
-        bool        immediately_start = false;
-        Duration    poll_interval     = std::chrono::milliseconds{ 100 };
-        std::size_t record_capacity   = 1024;
-        std::size_t buffer_capacity   = 1024;
     };
 
     Ascopet* instance();
