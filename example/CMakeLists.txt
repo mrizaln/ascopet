@@ -1,15 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(ascopet_example VERSION 0.1.0)
 
-include(cmake/prelude.cmake)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-find_package(fmt REQUIRED)
-
-# include(cmake/fetched-libs.cmake)
 
 # toggle this to ON to try to use fallback instead
 option(ASCOPET_DISABLE_RDTSC "disable rdtsc" OFF)
