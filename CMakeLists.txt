@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 
 project(
   ascopet
-  VERSION 0.3.0
+  VERSION 0.3.2
   LANGUAGES CXX
   DESCRIPTION "Asynchronous scope time measurement library for C++20"
 )
